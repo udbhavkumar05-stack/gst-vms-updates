@@ -67,109 +67,116 @@ def _do_update_check(parent_win):
 def _show_update_popup(parent_win, new_ver, changelog):
     top = Toplevel(parent_win)
     top.title("⬆  Update Available")
-    top.geometry("460x460")
-    top.resizable(False, False)
+    top.geometry("460x400")
+    top.resizable(True, True)
+    top.minsize(420, 360)
     top.configure(bg="#FFFFFF")
     top.transient(parent_win)
     top.grab_set()
+    # Center on screen
+    top.update_idletasks()
+    sw = top.winfo_screenwidth()
+    sh = top.winfo_screenheight()
+    x  = (sw // 2) - 230
+    y  = (sh // 2) - 200
+    top.geometry(f"460x400+{x}+{y}")
+
+    # ── BUTTONS fixed at BOTTOM — always visible ──
+    btn_frame = Frame(top, bg="#F8FAFF",
+                      highlightthickness=1,
+                      highlightbackground="#E2E8F0",
+                      pady=14)
+    btn_frame.pack(side=BOTTOM, fill=X, padx=0)
+
+    prog_var = StringVar(value="")
+    Label(btn_frame, textvariable=prog_var,
+          font=("Segoe UI",8,"italic"),
+          bg="#F8FAFF", fg="#2563EB").pack(pady=(0,8))
+
+    btn_row = Frame(btn_frame, bg="#F8FAFF")
+    btn_row.pack()
+
+    # ── SCROLLABLE content area ──
+    scroll_frame = Frame(top, bg="#FFFFFF")
+    scroll_frame.pack(side=TOP, fill=BOTH, expand=True)
 
     # Header
-    hdr = Frame(top, bg="#1B2E4B", pady=14); hdr.pack(fill=X)
+    hdr = Frame(scroll_frame, bg="#1B2E4B", pady=14)
+    hdr.pack(fill=X)
     Label(hdr, text="⬆  Update Available",
           font=("Segoe UI",13,"bold"),
           bg="#1B2E4B", fg="#C8A84B").pack()
-    Label(hdr, text="A new version of GST VMS is ready",
+    Label(hdr, text="A new version of GST VMS is ready to install",
           font=("Segoe UI",8),
           bg="#1B2E4B", fg="#94A3B8").pack(pady=(2,0))
 
-    body = Frame(top, bg="#FFFFFF", padx=24, pady=16)
+    # Body content
+    body = Frame(scroll_frame, bg="#FFFFFF", padx=24, pady=14)
     body.pack(fill=BOTH, expand=True)
 
     # Version row
-    vrow = Frame(body, bg="#F8FAFF",
-                 highlightthickness=1, highlightbackground="#E2E8F0")
-    vrow.pack(fill=X, pady=(0,10))
-    vi = Frame(vrow, bg="#F8FAFF", padx=14, pady=10); vi.pack(fill=X)
-    Label(vi, text=f"Current version : {CURRENT_VERSION}",
+    vrow = Frame(body, bg="#F0FDF4",
+                 highlightthickness=1, highlightbackground="#BBF7D0")
+    vrow.pack(fill=X, pady=(0,12))
+    vi = Frame(vrow, bg="#F0FDF4", padx=14, pady=10); vi.pack(fill=X)
+    Label(vi, text=f"Current version  :  {CURRENT_VERSION}",
           font=("Segoe UI",9),
-          bg="#F8FAFF", fg="#64748B").pack(anchor=W)
-    Label(vi, text=f"New version     : {new_ver}",
-          font=("Segoe UI",11,"bold"),
-          bg="#F8FAFF", fg="#16A34A").pack(anchor=W)
+          bg="#F0FDF4", fg="#64748B").pack(anchor=W)
+    Label(vi, text=f"New version      :  {new_ver}",
+          font=("Segoe UI",12,"bold"),
+          bg="#F0FDF4", fg="#16A34A").pack(anchor=W, pady=(4,0))
 
     # Changelog
     if changelog:
-        Label(body, text="What's new:",
+        Label(body, text="What's new in this update:",
               font=("Segoe UI",9,"bold"),
-              bg="#FFFFFF", fg="#1E293B").pack(anchor=W)
-        Label(body, text=changelog,
-              font=("Segoe UI",8), bg="#FFFFFF", fg="#475569",
-              justify=LEFT, wraplength=380).pack(anchor=W, pady=(2,10))
+              bg="#FFFFFF", fg="#1E293B").pack(anchor=W, pady=(0,4))
+        for line in changelog.splitlines():
+            line = line.strip()
+            if line:
+                Label(body, text=f"  • {line}",
+                      font=("Segoe UI",9),
+                      bg="#FFFFFF", fg="#475569",
+                      justify=LEFT, anchor=W).pack(fill=X)
 
     # Safety note
+    Frame(body, bg="#E2E8F0", height=1).pack(fill=X, pady=(12,8))
     Label(body,
-          text="✅  Your data (Excel, photos) will NOT be touched.",
-          font=("Segoe UI",8,"bold"),
-          bg="#FFFFFF", fg="#16A34A").pack(anchor=W, pady=(0,10))
+          text="✅  Your Excel data and photos will NOT be changed.",
+          font=("Segoe UI",9,"bold"),
+          bg="#FFFFFF", fg="#16A34A").pack(anchor=W)
 
-    # Progress label
-    prog_var = StringVar(value="")
-    prog_lbl = Label(body, textvariable=prog_var,
-                     font=("Segoe UI",8,"italic"),
-                     bg="#FFFFFF", fg="#2563EB")
-    prog_lbl.pack(anchor=W, pady=(0,8))
-
-    # Buttons
-    btn_row = Frame(body, bg="#FFFFFF"); btn_row.pack(fill=X)
-
+    # ── Download logic ──
     def _download():
         upd.config(state=DISABLED, text="Downloading…")
         skp.config(state=DISABLED)
-        prog_var.set("⏳  Downloading update from GitHub…")
+        prog_var.set("⏳  Downloading from GitHub…")
         top.update()
 
         def _dl():
             try:
                 import urllib.request as _ur
                 import shutil as _sh
-
-                # Determine what file to replace and what to download
-                dest         = _get_current_file()
-                running_exe  = _is_exe()
-                dl_url       = DOWNLOAD_URL_EXE if running_exe else DOWNLOAD_URL_PY
-                tmp          = dest + ".update_tmp"
-
+                dest        = _get_current_file()
+                running_exe = _is_exe()
+                dl_url      = DOWNLOAD_URL_EXE if running_exe else DOWNLOAD_URL_PY
+                tmp         = dest + ".update_tmp"
                 top.after(0, lambda: prog_var.set(
                     f"⏳  Downloading {'VMS.exe' if running_exe else 'vms.py'}…"))
-
                 _ur.urlretrieve(dl_url, tmp)
-
-                # Verify downloaded file
                 size = os.path.getsize(tmp)
                 if size < 5000:
-                    raise Exception(
-                        f"Download incomplete ({size} bytes). "
-                        f"Check internet and retry.")
-
-                # Backup current file
-                bak = dest + ".backup"
-                _sh.copy2(dest, bak)
-
-                # Replace with new file
-                # On Windows, can't overwrite running .exe — rename trick
+                    raise Exception(f"Incomplete download ({size} bytes)")
+                _sh.copy2(dest, dest + ".backup")
                 if running_exe:
                     old = dest + ".old"
-                    if os.path.exists(old):
-                        os.remove(old)
+                    if os.path.exists(old): os.remove(old)
                     os.rename(dest, old)
                     os.rename(tmp, dest)
                 else:
                     _sh.move(tmp, dest)
-
                 top.after(0, _ok)
-
             except Exception as ex:
-                # Clean up temp file if exists
                 try:
                     if os.path.exists(tmp): os.remove(tmp)
                 except: pass
@@ -191,8 +198,7 @@ def _show_update_popup(parent_win, new_ver, changelog):
             skp.config(state=NORMAL)
             messagebox.showerror(
                 "Update Failed",
-                f"Could not download update.\n\n"
-                f"Reason:\n{e}\n\n"
+                f"Could not download update.\n\nReason:\n{e}\n\n"
                 f"Your current software still works.\n"
                 f"Check internet and try again.",
                 parent=top)
@@ -201,20 +207,20 @@ def _show_update_popup(parent_win, new_ver, changelog):
 
     upd = Button(btn_row,
                  text="⬆  Update Now",
-                 font=("Segoe UI",10,"bold"),
+                 font=("Segoe UI",11,"bold"),
                  bg="#16A34A", fg="#FFFFFF",
                  relief=FLAT, cursor="hand2",
-                 padx=16, pady=10,
+                 padx=24, pady=12,
                  activebackground="#15803D",
                  command=_download)
-    upd.pack(side=LEFT, padx=(0,10))
+    upd.pack(side=LEFT, padx=(0,12))
 
     skp = Button(btn_row,
-                 text="Later",
-                 font=("Segoe UI",9),
+                 text="  Later  ",
+                 font=("Segoe UI",10),
                  bg="#F1F5F9", fg="#64748B",
                  relief=FLAT, cursor="hand2",
-                 padx=14, pady=10,
+                 padx=16, pady=12,
                  activebackground="#E2E8F0",
                  command=top.destroy)
     skp.pack(side=LEFT)
