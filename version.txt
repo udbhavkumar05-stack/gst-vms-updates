@@ -1,6 +1,9 @@
-v14
-Auto-update system added
-WhatsApp URL method improved
-Inside count real-time fixed
-VIP code system working
-Officer WhatsApp number in officer list
+v15
+Purpose stays blank on 2nd visit - receptionist asks
+Photo mismatch fixed - folder path saved correctly
+Same day warning now works properly
+Daily report - choose save location + opens after save
+Inside count fixed - counts ID cards
+Refresh button added to stats bar
+Check Update added to sidebar menu
+Auto-update on startup
