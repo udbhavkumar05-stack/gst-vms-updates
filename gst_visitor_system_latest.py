@@ -66,11 +66,10 @@ def _do_update_check(parent_win):
 
 def _show_update_popup(parent_win, new_ver, changelog):
     """
-    Update popup — buttons use place() pinned to bottom.
-    They are ALWAYS visible no matter how long changelog is.
+    Simple popup — NO changelog text — always fits on screen.
+    Buttons are ALWAYS visible using place().
     """
-    POPUP_W = 460
-    POPUP_H = 420
+    W, H = 420, 280
 
     top = Toplevel(parent_win)
     top.title("Update Available")
@@ -78,107 +77,78 @@ def _show_update_popup(parent_win, new_ver, changelog):
     top.resizable(False, False)
     top.transient(parent_win)
     top.grab_set()
-
-    # Centre on screen
     top.update_idletasks()
     sw = top.winfo_screenwidth()
     sh = top.winfo_screenheight()
-    x  = (sw - POPUP_W) // 2
-    y  = (sh - POPUP_H) // 2
-    top.geometry(f"{POPUP_W}x{POPUP_H}+{x}+{y}")
+    top.geometry(f"{W}x{H}+{(sw-W)//2}+{(sh-H)//2}")
 
-    # ── BUTTON BAR — pinned to bottom with place() ──────────────
-    # Height of button bar area
-    BTN_H = 80
-    btn_area = Frame(top, bg="#F0FDF4",
-                     highlightthickness=1,
-                     highlightbackground="#BBF7D0")
-    btn_area.place(x=0, y=POPUP_H-BTN_H, width=POPUP_W, height=BTN_H)
+    # ── BUTTONS — place() locked at bottom 70px ─────────────────
+    btn_bg = "#F0FDF4"
+    btn_zone = Frame(top, bg=btn_bg)
+    btn_zone.place(x=0, y=H-70, width=W, height=70)
 
     prog_var = StringVar(value="")
-    Label(btn_area, textvariable=prog_var,
+    Label(btn_zone, textvariable=prog_var,
           font=("Segoe UI",8,"italic"),
-          bg="#F0FDF4", fg="#2563EB").pack(pady=(6,0))
+          bg=btn_bg, fg="#2563EB").pack(pady=(6,2))
 
-    btn_row = Frame(btn_area, bg="#F0FDF4")
-    btn_row.pack(pady=(4,0))
+    brow = Frame(btn_zone, bg=btn_bg); brow.pack()
 
-    # ── CONTENT AREA — fills everything above button bar ────────
-    content = Frame(top, bg="#FFFFFF")
-    content.place(x=0, y=0, width=POPUP_W, height=POPUP_H-BTN_H)
+    # ── CONTENT — place() fills top area ────────────────────────
+    box = Frame(top, bg="#FFFFFF")
+    box.place(x=0, y=0, width=W, height=H-70)
 
-    # Header
-    hdr = Frame(content, bg="#1B2E4B")
-    hdr.pack(fill=X)
+    # Dark header
+    hdr = Frame(box, bg="#1B2E4B"); hdr.pack(fill=X)
     Label(hdr, text="⬆  Update Available",
           font=("Segoe UI",13,"bold"),
           bg="#1B2E4B", fg="#C8A84B",
-          pady=10).pack()
-    Label(hdr, text="A new version of GST VMS is ready to install",
-          font=("Segoe UI",8),
-          bg="#1B2E4B", fg="#94A3B8",
-          pady=4).pack()
+          pady=12).pack()
 
-    # Body
-    body = Frame(content, bg="#FFFFFF", padx=22, pady=12)
-    body.pack(fill=BOTH, expand=True)
+    # Version info
+    mid = Frame(box, bg="#FFFFFF", padx=30, pady=20)
+    mid.pack(fill=X)
 
-    # Version box
-    vbox = Frame(body, bg="#F0FDF4",
-                 highlightthickness=1,
-                 highlightbackground="#BBF7D0")
-    vbox.pack(fill=X, pady=(0,10))
-    vi = Frame(vbox, bg="#F0FDF4", padx=12, pady=8); vi.pack(fill=X)
-    Label(vi, text=f"Current version  :  {CURRENT_VERSION}",
-          font=("Segoe UI",9),
-          bg="#F0FDF4", fg="#64748B").pack(anchor=W)
-    Label(vi, text=f"New version      :  {new_ver}",
-          font=("Segoe UI",11,"bold"),
-          bg="#F0FDF4", fg="#16A34A").pack(anchor=W, pady=(3,0))
+    Label(mid, text="Current version",
+          font=("Segoe UI",9), bg="#FFFFFF",
+          fg="#94A3B8").pack(anchor=W)
+    Label(mid, text=CURRENT_VERSION,
+          font=("Segoe UI",18,"bold"),
+          bg="#FFFFFF", fg="#1E293B").pack(anchor=W)
 
-    # Changelog
-    if changelog:
-        Label(body, text="What's new:",
-              font=("Segoe UI",9,"bold"),
-              bg="#FFFFFF", fg="#1E293B").pack(anchor=W, pady=(0,4))
-        for line in changelog.strip().splitlines():
-            ln = line.strip()
-            if ln:
-                Label(body, text=f"  \u2022  {ln}",
-                      font=("Segoe UI",8),
-                      bg="#FFFFFF", fg="#475569",
-                      justify=LEFT, anchor=W).pack(fill=X)
+    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=10)
 
-    # Safety note
-    Frame(body, bg="#E2E8F0", height=1).pack(fill=X, pady=(10,6))
-    Label(body,
-          text="\u2705  Your Excel data and photos will NOT be changed.",
-          font=("Segoe UI",8,"bold"),
+    Label(mid, text="New version available",
+          font=("Segoe UI",9), bg="#FFFFFF",
+          fg="#94A3B8").pack(anchor=W)
+    Label(mid, text=new_ver,
+          font=("Segoe UI",18,"bold"),
           bg="#FFFFFF", fg="#16A34A").pack(anchor=W)
 
-    # ── Download logic ───────────────────────────────────────────
+    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=(10,0))
+
+    Label(mid, text="✅  Your data (Excel, photos) will NOT be changed.",
+          font=("Segoe UI",8,"bold"),
+          bg="#FFFFFF", fg="#16A34A").pack(anchor=W, pady=(8,0))
+
+    # ── Download ─────────────────────────────────────────────────
     def _download():
-        upd.config(state=DISABLED, text="Downloading\u2026")
+        upd.config(state=DISABLED, text="Downloading…")
         skp.config(state=DISABLED)
-        prog_var.set("\u23f3  Downloading from GitHub\u2026")
+        prog_var.set("⏳  Downloading…")
         top.update()
 
         def _dl():
             tmp = None
             try:
-                import urllib.request as _ur
-                import shutil as _sh
+                import urllib.request as _ur, shutil as _sh
                 dest        = _get_current_file()
                 running_exe = _is_exe()
                 dl_url      = DOWNLOAD_URL_EXE if running_exe else DOWNLOAD_URL_PY
                 tmp         = dest + ".update_tmp"
-                top.after(0, lambda: prog_var.set(
-                    f"\u23f3  Downloading "
-                    f"{'VMS.exe' if running_exe else 'vms.py'}\u2026"))
                 _ur.urlretrieve(dl_url, tmp)
-                size = os.path.getsize(tmp)
-                if size < 5000:
-                    raise Exception(f"Incomplete download ({size} bytes)")
+                if os.path.getsize(tmp) < 5000:
+                    raise Exception("Incomplete download — check internet")
                 _sh.copy2(dest, dest + ".backup")
                 if running_exe:
                     old = dest + ".old"
@@ -195,37 +165,36 @@ def _show_update_popup(parent_win, new_ver, changelog):
                 top.after(0, lambda e=str(ex): _fail(e))
 
         def _ok():
-            prog_var.set("\u2705  Download complete!")
+            prog_var.set("✅  Done!")
             messagebox.showinfo(
-                "\u2705  Update Complete",
-                f"GST VMS updated to {new_ver}!\n\n"
-                f"Please CLOSE and RESTART the software.\n\n"
+                "✅  Update Complete",
+                f"Updated to {new_ver}!\n\n"
+                f"Please CLOSE and RESTART the software now.\n\n"
                 f"Your data is safe.",
                 parent=top)
             top.destroy()
 
         def _fail(e):
-            prog_var.set(f"\u274c  Failed: {e}")
-            upd.config(state=NORMAL, text="\u2b06  Retry")
+            prog_var.set(f"❌  {e[:60]}")
+            upd.config(state=NORMAL, text="⬆  Retry")
             skp.config(state=NORMAL)
             messagebox.showerror("Update Failed",
                 f"Could not download.\n\nReason:\n{e}\n\n"
-                f"Check internet and retry.", parent=top)
+                f"Check internet and try again.",
+                parent=top)
 
         threading.Thread(target=_dl, daemon=True).start()
 
-    upd = Button(btn_row,
-                 text="\u2b06  Update Now",
+    upd = Button(brow, text="⬆  Update Now",
                  font=("Segoe UI",10,"bold"),
                  bg="#16A34A", fg="#FFFFFF",
                  relief=FLAT, cursor="hand2",
                  padx=20, pady=6,
                  activebackground="#15803D",
                  command=_download)
-    upd.pack(side=LEFT, padx=(0,12))
+    upd.pack(side=LEFT, padx=(0,10))
 
-    skp = Button(btn_row,
-                 text="  Later  ",
+    skp = Button(brow, text="  Later  ",
                  font=("Segoe UI",9),
                  bg="#E2E8F0", fg="#475569",
                  relief=FLAT, cursor="hand2",
