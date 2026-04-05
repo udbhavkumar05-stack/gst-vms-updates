@@ -67,7 +67,7 @@ def _do_update_check(parent_win):
 def _show_update_popup(parent_win, new_ver, changelog):
     top = Toplevel(parent_win)
     top.title("⬆  Update Available")
-    top.geometry("440x380")
+    top.geometry("460x460")
     top.resizable(False, False)
     top.configure(bg="#FFFFFF")
     top.transient(parent_win)
