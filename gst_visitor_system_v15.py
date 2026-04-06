@@ -48,7 +48,11 @@ def _get_current_file():
 def _is_exe():
     return getattr(_sys, "frozen", False)
 
-def _do_update_check(parent_win):
+def _do_update_check(parent_win, manual=False):
+    """
+    manual=False -> silent when up to date (auto startup check)
+    manual=True  -> always shows result (sidebar button click)
+    """
     try:
         import urllib.request as _ur
         with _ur.urlopen(VERSION_URL, timeout=8) as r:
@@ -56,20 +60,43 @@ def _do_update_check(parent_win):
         lines     = raw.splitlines()
         new_ver   = lines[0].strip()
         changelog = "\n".join(lines[1:]).strip() if len(lines) > 1 else ""
+
         if new_ver == CURRENT_VERSION:
-            return  # already up to date — silent
+            if manual:
+                # Check internet status
+                try:
+                    import urllib.request as _ur2
+                    _ur2.urlopen("http://www.google.com", timeout=3)
+                    net_status = "🌐 Internet: Online ✅"
+                except:
+                    net_status = "🌐 Internet: Offline ⚠️"
+                parent_win.after(0, lambda: messagebox.showinfo(
+                    "✅  Up to Date",
+                    f"GST VMS is up to date.\n\n"
+                    f"Current version : {CURRENT_VERSION}\n\n"
+                    f"No update available right now.\n\n"
+                    f"{net_status}",
+                    parent=parent_win))
+            return
+
         parent_win.after(0, lambda: _show_update_popup(
             parent_win, new_ver, changelog))
+
     except Exception as _ue:
-        # Silent on network failure — don't bother user
-        print(f"Update check: {_ue}")
+        if manual:
+            parent_win.after(0, lambda e=str(_ue): messagebox.showerror(
+                "\u274c  Check Failed",
+                f"Could not check for updates.\n\n"
+                f"Reason: {e}\n\n"
+                f"Check your internet connection and try again.",
+                parent=parent_win))
+        else:
+            print(f"Auto update check: {_ue}")
+
 
 def _show_update_popup(parent_win, new_ver, changelog):
-    """
-    Simple popup — NO changelog text — always fits on screen.
-    Buttons are ALWAYS visible using place().
-    """
-    W, H = 420, 280
+    """Update popup — buttons locked at bottom with place(). Always visible."""
+    W, H, BTN_H = 420, 280, 70
 
     top = Toplevel(parent_win)
     top.title("Update Available")
@@ -82,62 +109,45 @@ def _show_update_popup(parent_win, new_ver, changelog):
     sh = top.winfo_screenheight()
     top.geometry(f"{W}x{H}+{(sw-W)//2}+{(sh-H)//2}")
 
-    # ── BUTTONS — place() locked at bottom 70px ─────────────────
-    btn_bg = "#F0FDF4"
-    btn_zone = Frame(top, bg=btn_bg)
-    btn_zone.place(x=0, y=H-70, width=W, height=70)
-
+    # Buttons — locked at bottom using place()
+    btn_zone = Frame(top, bg="#F0FDF4")
+    btn_zone.place(x=0, y=H-BTN_H, width=W, height=BTN_H)
     prog_var = StringVar(value="")
     Label(btn_zone, textvariable=prog_var,
           font=("Segoe UI",8,"italic"),
-          bg=btn_bg, fg="#2563EB").pack(pady=(6,2))
+          bg="#F0FDF4", fg="#2563EB").pack(pady=(6,2))
+    brow = Frame(btn_zone, bg="#F0FDF4"); brow.pack()
 
-    brow = Frame(btn_zone, bg=btn_bg); brow.pack()
-
-    # ── CONTENT — place() fills top area ────────────────────────
+    # Content — fills top area
     box = Frame(top, bg="#FFFFFF")
-    box.place(x=0, y=0, width=W, height=H-70)
+    box.place(x=0, y=0, width=W, height=H-BTN_H)
 
-    # Dark header
     hdr = Frame(box, bg="#1B2E4B"); hdr.pack(fill=X)
-    Label(hdr, text="⬆  Update Available",
+    Label(hdr, text="\u2b06  Update Available",
           font=("Segoe UI",13,"bold"),
-          bg="#1B2E4B", fg="#C8A84B",
-          pady=12).pack()
+          bg="#1B2E4B", fg="#C8A84B", pady=12).pack()
 
-    # Version info
-    mid = Frame(box, bg="#FFFFFF", padx=30, pady=20)
-    mid.pack(fill=X)
-
+    mid = Frame(box, bg="#FFFFFF", padx=30, pady=14); mid.pack(fill=X)
     Label(mid, text="Current version",
-          font=("Segoe UI",9), bg="#FFFFFF",
-          fg="#94A3B8").pack(anchor=W)
+          font=("Segoe UI",9), bg="#FFFFFF", fg="#94A3B8").pack(anchor=W)
     Label(mid, text=CURRENT_VERSION,
           font=("Segoe UI",18,"bold"),
           bg="#FFFFFF", fg="#1E293B").pack(anchor=W)
-
-    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=10)
-
+    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=8)
     Label(mid, text="New version available",
-          font=("Segoe UI",9), bg="#FFFFFF",
-          fg="#94A3B8").pack(anchor=W)
+          font=("Segoe UI",9), bg="#FFFFFF", fg="#94A3B8").pack(anchor=W)
     Label(mid, text=new_ver,
           font=("Segoe UI",18,"bold"),
           bg="#FFFFFF", fg="#16A34A").pack(anchor=W)
-
-    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=(10,0))
-
-    Label(mid, text="✅  Your data (Excel, photos) will NOT be changed.",
+    Frame(mid, bg="#E2E8F0", height=1).pack(fill=X, pady=(8,0))
+    Label(mid, text="\u2705  Your data (Excel, photos) will NOT be changed.",
           font=("Segoe UI",8,"bold"),
-          bg="#FFFFFF", fg="#16A34A").pack(anchor=W, pady=(8,0))
+          bg="#FFFFFF", fg="#16A34A").pack(anchor=W, pady=(6,0))
 
-    # ── Download ─────────────────────────────────────────────────
     def _download():
-        upd.config(state=DISABLED, text="Downloading…")
+        upd.config(state=DISABLED, text="Downloading\u2026")
         skp.config(state=DISABLED)
-        prog_var.set("⏳  Downloading…")
-        top.update()
-
+        prog_var.set("\u23f3  Downloading\u2026"); top.update()
         def _dl():
             tmp = None
             try:
@@ -163,52 +173,43 @@ def _show_update_popup(parent_win, new_ver, changelog):
                     if tmp and os.path.exists(tmp): os.remove(tmp)
                 except: pass
                 top.after(0, lambda e=str(ex): _fail(e))
-
         def _ok():
-            prog_var.set("✅  Done!")
-            messagebox.showinfo(
-                "✅  Update Complete",
+            prog_var.set("\u2705  Done!")
+            messagebox.showinfo("\u2705  Update Complete",
                 f"Updated to {new_ver}!\n\n"
-                f"Please CLOSE and RESTART the software now.\n\n"
-                f"Your data is safe.",
-                parent=top)
+                f"Please CLOSE and RESTART the software.\n\n"
+                f"Your data is safe.", parent=top)
             top.destroy()
-
         def _fail(e):
-            prog_var.set(f"❌  {e[:60]}")
-            upd.config(state=NORMAL, text="⬆  Retry")
+            prog_var.set(f"\u274c  {e[:50]}")
+            upd.config(state=NORMAL, text="\u2b06  Retry")
             skp.config(state=NORMAL)
             messagebox.showerror("Update Failed",
                 f"Could not download.\n\nReason:\n{e}\n\n"
-                f"Check internet and try again.",
-                parent=top)
-
+                f"Check internet and try again.", parent=top)
         threading.Thread(target=_dl, daemon=True).start()
 
-    upd = Button(brow, text="⬆  Update Now",
+    upd = Button(brow, text="\u2b06  Update Now",
                  font=("Segoe UI",10,"bold"),
-                 bg="#16A34A", fg="#FFFFFF",
-                 relief=FLAT, cursor="hand2",
-                 padx=20, pady=6,
-                 activebackground="#15803D",
-                 command=_download)
+                 bg="#16A34A", fg="#FFFFFF", relief=FLAT,
+                 cursor="hand2", padx=20, pady=6,
+                 activebackground="#15803D", command=_download)
     upd.pack(side=LEFT, padx=(0,10))
-
     skp = Button(brow, text="  Later  ",
-                 font=("Segoe UI",9),
-                 bg="#E2E8F0", fg="#475569",
-                 relief=FLAT, cursor="hand2",
-                 padx=14, pady=6,
-                 activebackground="#CBD5E1",
-                 command=top.destroy)
+                 font=("Segoe UI",9), bg="#E2E8F0", fg="#475569",
+                 relief=FLAT, cursor="hand2", padx=14, pady=6,
+                 activebackground="#CBD5E1", command=top.destroy)
     skp.pack(side=LEFT)
 
-def check_for_update_async(parent_win):
-    """Call from anywhere — checks GitHub in background, zero UI freeze."""
+
+def check_for_update_async(parent_win, manual=False):
+    """Background update check — zero UI freeze."""
     threading.Thread(
         target=_do_update_check,
         args=(parent_win,),
+        kwargs={"manual": manual},
         daemon=True).start()
+
 
 def load_data_path():
     if os.path.exists(SETTINGS_FILE):
@@ -1176,6 +1177,9 @@ def show_login():
         # Bottom info
         Label(card, text="Authorised Personnel Only  •  GST Department",
               font=("Segoe UI", 7), bg="#FFFFFF",
+              fg="#CBD5E1").pack(pady=(0, 4))
+        Label(card, text="Developed by: Udbhav K  •  v15",
+              font=("Segoe UI", 7), bg="#FFFFFF",
               fg="#CBD5E1").pack(pady=(0, 12))
 
     # ── FORGOT PASSWORD WINDOW ──
@@ -1994,7 +1998,7 @@ def open_reception():
     _menu_item(sb_menu, "📊", "Daily Report", command=lambda: daily_report())
     _menu_item(sb_menu, "⚙",  "Settings",    command=lambda: messagebox.showinfo(
         "Settings", "Go to Admin login for Settings.\n\nadmin / admin123"))
-    _menu_item(sb_menu, "⬆",  "Check Update", command=lambda: check_for_update_async(root))
+    _menu_item(sb_menu, "⬆",  "Check Update", command=lambda: check_for_update_async(root, manual=True))
 
     # ── Logout button — prominent in sidebar ──
     Frame(sb_menu, bg="#243552", height=1).pack(fill=X, pady=(16,0))
@@ -2133,17 +2137,22 @@ def open_reception():
                 df["Out"]  = df["Out"].astype(str).str.strip()
                 td    = df[df["Date"] == today]
                 still = td[td["Out"].isin(OUT_EMPTY)]
-                # Count by number of ID cards per row (most accurate)
+                # Count inside — use ID Cards column (most accurate)
                 inside_count = 0
                 for _, row in still.iterrows():
                     try:
                         ids = str(row.get("ID Cards","")).strip()
                         if ids and ids not in ("","nan","NaN","None"):
-                            n = len([x for x in ids.replace(";",",").split(",") if x.strip()])
-                            inside_count += max(n, 1)
+                            # Count comma/semicolon separated IDs
+                            id_list = [x.strip() for x in
+                                      ids.replace(";",",").split(",")
+                                      if x.strip()]
+                            inside_count += max(len(id_list), 1)
                         else:
-                            val = str(row.get("Remaining","1")).strip()
-                            if val in ("","nan","NaN","None","0"): val = "1"
+                            # Fallback: use Total Members column
+                            val = str(row.get("Total Members","1")).strip()
+                            if val in ("","nan","NaN","None","0"):
+                                val = "1"
                             inside_count += int(float(val))
                     except:
                         inside_count += 1
@@ -2151,9 +2160,10 @@ def open_reception():
                     cv_s.set(f"📋  Today: {t}"),
                     iv_s.set(f"●  Inside: {i}")
                 ))
-            except: pass
+            except Exception as _se:
+                print(f"update_stats error: {_se}")
         threading.Thread(target=_do_read, daemon=True).start()
-        root.after(4000, update_stats)
+        root.after(3000, update_stats)
     update_stats()
 
     # ── TODAY detail popup ──

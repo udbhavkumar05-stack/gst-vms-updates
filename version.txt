@@ -1,9 +1,10 @@
 v15
+Check Update now shows result always
+Internet status shown in update check
+Developer credit added - Udbhav K
+Inside count fixed - uses ID Cards column
 Update popup buttons always visible
-Purpose stays blank on 2nd visit
+Purpose blank on 2nd visit
 Photo mismatch fixed
 Same day warning fixed
 Daily report with save location
-Inside count fixed
-Refresh button added
-Check Update in sidebar
