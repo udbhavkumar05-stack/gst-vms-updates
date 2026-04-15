@@ -1,10 +1,7 @@
-v15
-VIP System ON/OFF added in Admin Panel
-VIP entry hidden on reception when OFF
-VIP popup blocked when OFF
-80% faster performance - cache system
-Check Update shows result always
-Internet status in update check
-Developer credit - Udbhav K
-Inside count fixed
-Update popup buttons always visible
+v15.1
+Settings: Change Password, About, Check Update
+No admin password shown in settings
+Photo fix: searches all visits for valid photo
+Visitor report: date filter, type filter, Excel, PDF save
+VIP System ON/OFF in Admin Panel
+80% faster performance
