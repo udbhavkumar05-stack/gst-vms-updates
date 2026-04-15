@@ -1,6 +1,6 @@
-v17
-Auto-detect data folder after new install
-Visitor OUT reads fresh from disk always
-Inside count updates immediately after OUT
-Startup data path detection fixed
-All previous fixes included
+v16
+GitHub Releases used for EXE download - no 25MB limit
+Auto-detect old data after reinstall
+Visitor OUT fixed
+Inside count updates instantly
+Update popup fixed for all screens

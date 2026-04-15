@@ -48,13 +48,16 @@ def save_vip_enabled(enabled: bool):
         return False
 
 # ── Version & Auto-Update ──────────────────────────────────────
-CURRENT_VERSION = "v15"
-_GH_RAW      = ("https://raw.githubusercontent.com/"
-                 "udbhavkumar05-stack/gst-vms-updates/main/")
-VERSION_URL  = _GH_RAW + "version.txt"
-# Two download URLs — one for .exe, one for .py
+CURRENT_VERSION  = "v16"
+_GH_USER     = "udbhavkumar05-stack"
+_GH_REPO     = "gst-vms-updates"
+_GH_RAW      = (f"https://raw.githubusercontent.com/"
+                 f"{_GH_USER}/{_GH_REPO}/main/")
+_GH_RELEASES = (f"https://github.com/{_GH_USER}/{_GH_REPO}/releases/download/")
+VERSION_URL      = _GH_RAW + "version.txt"
 DOWNLOAD_URL_PY  = _GH_RAW + "gst_visitor_system_latest.py"
-DOWNLOAD_URL_EXE = _GH_RAW + "VMS.exe"
+# EXE from GitHub Releases — supports files over 25MB
+DOWNLOAD_URL_EXE = _GH_RELEASES + "{ver}/VMS.exe"
 
 def _get_current_file():
     """Return path to currently running file — works for both .exe and .py"""
@@ -178,7 +181,12 @@ def _show_update_popup(parent_win, new_ver, changelog):
                 import urllib.request as _ur, shutil as _sh
                 dest        = _get_current_file()
                 running_exe = _is_exe()
-                dl_url      = DOWNLOAD_URL_EXE if running_exe else DOWNLOAD_URL_PY
+                # For .exe — use GitHub Releases URL with version tag
+                # For .py  — use raw GitHub URL
+                if running_exe:
+                    dl_url = DOWNLOAD_URL_EXE.format(ver=new_ver)
+                else:
+                    dl_url = DOWNLOAD_URL_PY
                 tmp         = dest + ".update_tmp"
                 _ur.urlretrieve(dl_url, tmp)
                 if os.path.getsize(tmp) < 5000:

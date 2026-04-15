@@ -48,13 +48,16 @@ def save_vip_enabled(enabled: bool):
         return False
 
 # ── Version & Auto-Update ──────────────────────────────────────
-CURRENT_VERSION = "v15"
-_GH_RAW      = ("https://raw.githubusercontent.com/"
-                 "udbhavkumar05-stack/gst-vms-updates/main/")
-VERSION_URL  = _GH_RAW + "version.txt"
-# Two download URLs — one for .exe, one for .py
+CURRENT_VERSION  = "v16"
+_GH_USER     = "udbhavkumar05-stack"
+_GH_REPO     = "gst-vms-updates"
+_GH_RAW      = (f"https://raw.githubusercontent.com/"
+                 f"{_GH_USER}/{_GH_REPO}/main/")
+_GH_RELEASES = (f"https://github.com/{_GH_USER}/{_GH_REPO}/releases/download/")
+VERSION_URL      = _GH_RAW + "version.txt"
 DOWNLOAD_URL_PY  = _GH_RAW + "gst_visitor_system_latest.py"
-DOWNLOAD_URL_EXE = _GH_RAW + "VMS.exe"
+# EXE from GitHub Releases — supports files over 25MB
+DOWNLOAD_URL_EXE = _GH_RELEASES + "{ver}/VMS.exe"
 
 def _get_current_file():
     """Return path to currently running file — works for both .exe and .py"""
@@ -178,7 +181,12 @@ def _show_update_popup(parent_win, new_ver, changelog):
                 import urllib.request as _ur, shutil as _sh
                 dest        = _get_current_file()
                 running_exe = _is_exe()
-                dl_url      = DOWNLOAD_URL_EXE if running_exe else DOWNLOAD_URL_PY
+                # For .exe — use GitHub Releases URL with version tag
+                # For .py  — use raw GitHub URL
+                if running_exe:
+                    dl_url = DOWNLOAD_URL_EXE.format(ver=new_ver)
+                else:
+                    dl_url = DOWNLOAD_URL_PY
                 tmp         = dest + ".update_tmp"
                 _ur.urlretrieve(dl_url, tmp)
                 if os.path.getsize(tmp) < 5000:
@@ -241,6 +249,7 @@ def check_for_update_async(parent_win, manual=False):
 
 
 def load_data_path():
+    # First check settings file
     if os.path.exists(SETTINGS_FILE):
         try:
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
@@ -250,6 +259,25 @@ def load_data_path():
                         if p and os.path.isdir(p):
                             return p
         except: pass
+
+    # Auto-detect: search common locations for existing Excel data
+    _search_paths = [
+        _SCRIPT_DIR,
+        os.path.join(_SCRIPT_DIR, "GST_Data"),
+        os.path.join(os.path.expanduser("~"), "Desktop", "GST_Data"),
+        os.path.join(os.path.expanduser("~"), "Documents", "GST_Data"),
+        r"C:\GST_Data",
+        r"C:\GST_VMS",
+        r"C:\Program Files\GST_VMS",
+        r"C:\Program Files (x86)\GST_VMS",
+    ]
+    _visitors_fname = "GST_Visitors.xlsx"
+    for p in _search_paths:
+        if os.path.isdir(p) and os.path.exists(os.path.join(p, _visitors_fname)):
+            # Found existing data — save this path and use it
+            save_data_path(p)
+            return p
+
     return _SCRIPT_DIR
 
 def save_data_path(new_path):
@@ -1357,6 +1385,19 @@ def show_login():
     lw.bind("<Return>", lambda e: None)
     # Check for updates 3 seconds after login screen loads
     lw.after(3000, lambda: check_for_update_async(lw))
+
+    # Check data path on startup — if first run after new install,
+    # show where data was found so user knows it is loaded correctly
+    def _check_data_on_startup():
+        try:
+            dp = load_data_path()
+            vf = os.path.join(dp, "GST_Visitors.xlsx")
+            sf = os.path.join(dp, "GST_Settings.txt")
+            if os.path.exists(vf) and not os.path.exists(sf):
+                # Data found but no settings file = first run after reinstall
+                save_data_path(dp)
+        except: pass
+    lw.after(500, _check_data_on_startup)
     lw.mainloop()
 
 
@@ -3962,7 +4003,13 @@ def open_reception():
         if not exit_ids: messagebox.showwarning("Invalid","Could not read ID number(s)."); return
         bulk_mode=len(exit_ids)>1; out_time=datetime.now().strftime(TIME_FORMAT)
         today=datetime.now().strftime(DATE_FORMAT)
-        df=pd.read_excel(VISITORS_FILE(),dtype=str)
+        # Always read fresh from disk for VISITOR OUT — never use cache
+        try:
+            df=pd.read_excel(VISITORS_FILE(), dtype=str, engine="openpyxl")
+        except Exception as ex:
+            messagebox.showerror("Error",
+                f"Cannot read visitor data.\n\nReason: {ex}\n\n"
+                f"Check data folder:\n{VISITORS_FILE()}"); return
         df["Date"]=df["Date"].astype(str).str.strip()
         df["Out"] =df["Out"].astype(str).str.strip()
         today_df=df[df["Date"]==today]
@@ -4025,7 +4072,11 @@ def open_reception():
         total_exited=sum(len(g["exiting"]) for g in groups.values())
         status_var.set(f"🚪  {'Bulk ' if bulk_mode else ''}EXIT — {total_exited} ID(s) at {out_time}")
         messagebox.showinfo("EXIT Recorded",final)
-        invalidate_cache(); clear_fields(); update_stats()
+        # Force cache clear + immediate stats refresh
+        invalidate_cache()
+        clear_fields()
+        # Run update_stats immediately (not after 5 second delay)
+        root.after(100, update_stats)
 
     # ══════════════════════════════════════
     #  SEARCH
