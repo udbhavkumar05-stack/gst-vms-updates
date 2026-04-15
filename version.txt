@@ -1,10 +1,10 @@
 v15
-Check Update now shows result always
-Internet status shown in update check
-Developer credit added - Udbhav K
-Inside count fixed - uses ID Cards column
+VIP System ON/OFF added in Admin Panel
+VIP entry hidden on reception when OFF
+VIP popup blocked when OFF
+80% faster performance - cache system
+Check Update shows result always
+Internet status in update check
+Developer credit - Udbhav K
+Inside count fixed
 Update popup buttons always visible
-Purpose blank on 2nd visit
-Photo mismatch fixed
-Same day warning fixed
-Daily report with save location

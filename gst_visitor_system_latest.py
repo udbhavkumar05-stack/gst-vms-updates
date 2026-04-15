@@ -26,6 +26,26 @@ else:
     _SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 SETTINGS_FILE = os.path.join(_SCRIPT_DIR, "GST_Settings.txt")
+VIP_CONFIG_FILE = os.path.join(_SCRIPT_DIR, "GST_VIP_Config.txt")
+
+def load_vip_enabled():
+    """Return True if VIP system is ON, False if OFF. Default ON."""
+    try:
+        if os.path.exists(VIP_CONFIG_FILE):
+            with open(VIP_CONFIG_FILE, "r", encoding="utf-8") as f:
+                val = f.read().strip()
+            return val != "OFF"
+    except: pass
+    return True   # default ON
+
+def save_vip_enabled(enabled: bool):
+    """Save VIP ON/OFF setting."""
+    try:
+        with open(VIP_CONFIG_FILE, "w", encoding="utf-8") as f:
+            f.write("ON" if enabled else "OFF")
+        return True
+    except:
+        return False
 
 # ── Version & Auto-Update ──────────────────────────────────────
 CURRENT_VERSION = "v15"
@@ -1357,7 +1377,8 @@ def open_admin():
     t_pur   = Frame(content, bg=BG_PAGE)
     t_off   = Frame(content, bg=BG_PAGE)
     t_cfg   = Frame(content, bg=BG_PAGE)
-    all_tabs = [t_log, t_users, t_vis, t_bk, t_pur, t_off, t_cfg]
+    t_vip   = Frame(content, bg=BG_PAGE)
+    all_tabs = [t_log, t_users, t_vis, t_bk, t_pur, t_off, t_cfg, t_vip]
     tab_btns = []
 
     TAB_INFO = [("  📋  Staff Log  ",    t_log),
@@ -1366,7 +1387,8 @@ def open_admin():
                 ("  💾  Backup  ",        t_bk),
                 ("  📋  Purpose List  ", t_pur),
                 ("  🏢  Officers  ",     t_off),
-                ("  ⚙️   Settings  ",     t_cfg)]
+                ("  ⚙️   Settings  ",     t_cfg),
+                ("  ⭐  VIP System  ",   t_vip)]
 
     def switch_tab(i):
         for t in all_tabs: t.pack_forget()
@@ -1894,6 +1916,114 @@ def open_admin():
     make_button(ri, "🔄  Reset to Desktop\\GST_Data", BTN_OUT,
                 command=reset_to_desktop, padx=12, pady=7).pack(anchor=W, pady=6)
 
+    # ── TAB: VIP System Settings ─────────────────────────────────
+    _tab_title(t_vip, "⭐  VIP System Settings")
+
+    vip_body = Frame(t_vip, bg=BG_PAGE, padx=24, pady=20)
+    vip_body.pack(fill=BOTH, expand=True)
+
+    # Info card
+    info_box = Frame(vip_body, bg="#FFFBEB",
+                     highlightthickness=1, highlightbackground="#FCD34D")
+    info_box.pack(fill=X, pady=(0,20))
+    Label(info_box, text="ℹ️  What is the VIP System?",
+          font=("Segoe UI",10,"bold"),
+          bg="#FFFBEB", fg="#92400E",
+          padx=16, pady=8).pack(anchor=W)
+    Label(info_box,
+          text=(
+              "When a visitor comes 3 or more times, the system offers to generate\n"
+              "a VIP code for them (e.g. B7766, CTO7).\n\n"
+              "With a VIP code:\n"
+              "  • Receptionist types code → all details load instantly\n"
+              "  • Faster entry for frequent visitors\n"
+              "  • VIP badge shown in returning visitor banner\n\n"
+              "Turn OFF if your office does not use VIP codes."
+          ),
+          font=("Segoe UI",9),
+          bg="#FFFBEB", fg="#92400E",
+          padx=16, pady=6, justify=LEFT).pack(anchor=W)
+
+    # Current status display
+    _vip_currently = load_vip_enabled()
+    status_lbl_var = StringVar(
+        value="✅  VIP System is currently: ON" if _vip_currently
+              else "❌  VIP System is currently: OFF")
+    status_color = "#16A34A" if _vip_currently else "#DC2626"
+
+    status_card = Frame(vip_body, bg=BG_CARD,
+                        highlightthickness=1, highlightbackground=BORDER_CLR)
+    status_card.pack(fill=X, pady=(0,20))
+    status_inner = Frame(status_card, bg=BG_CARD, padx=20, pady=16)
+    status_inner.pack(fill=X)
+
+    status_display = Label(status_inner, textvariable=status_lbl_var,
+                           font=("Segoe UI",13,"bold"),
+                           bg=BG_CARD, fg=status_color)
+    status_display.pack(anchor=W)
+    Label(status_inner,
+          text="Change takes effect immediately for all receptionists.",
+          font=("Segoe UI",8,"italic"),
+          bg=BG_CARD, fg=TEXT_LIGHT).pack(anchor=W, pady=(4,0))
+
+    # Toggle buttons
+    btn_row_vip = Frame(vip_body, bg=BG_PAGE)
+    btn_row_vip.pack(anchor=W, pady=(0,20))
+
+    def _set_vip(enabled):
+        if save_vip_enabled(enabled):
+            if enabled:
+                status_lbl_var.set("✅  VIP System is currently: ON")
+                status_display.config(fg="#16A34A")
+                messagebox.showinfo(
+                    "✅  VIP System — ON",
+                    "VIP System is now ENABLED.\n\n"
+                    "Receptionist will see VIP code prompt\n"
+                    "when a visitor comes 3+ times.\n\n"
+                    "VIP entry field is active on reception screen.",
+                    parent=root)
+            else:
+                status_lbl_var.set("❌  VIP System is currently: OFF")
+                status_display.config(fg="#DC2626")
+                messagebox.showinfo(
+                    "❌  VIP System — OFF",
+                    "VIP System is now DISABLED.\n\n"
+                    "No VIP code prompts will appear.\n"
+                    "VIP entry field is hidden on reception screen.\n\n"
+                    "Existing VIP codes in Excel are kept safely.",
+                    parent=root)
+        else:
+            messagebox.showerror("Error",
+                "Could not save setting. Check file permissions.",
+                parent=root)
+
+    make_button(btn_row_vip, "✅  Turn VIP ON", BTN_IN,
+                command=lambda: _set_vip(True),
+                padx=18, pady=10).pack(side=LEFT, padx=(0,12))
+
+    make_button(btn_row_vip, "❌  Turn VIP OFF", ACCENT_RED,
+                command=lambda: _set_vip(False),
+                padx=18, pady=10).pack(side=LEFT)
+
+    # What changes when OFF
+    off_box = Frame(vip_body, bg="#FEF2F2",
+                    highlightthickness=1, highlightbackground="#FECACA")
+    off_box.pack(fill=X)
+    Label(off_box, text="When VIP is OFF:",
+          font=("Segoe UI",9,"bold"),
+          bg="#FEF2F2", fg="#DC2626",
+          padx=16, pady=8).pack(anchor=W)
+    Label(off_box,
+          text=(
+              "  • VIP code entry field hidden from receptionist\n"
+              "  • No VIP code popup on 3rd visit\n"
+              "  • VIP badge not shown in returning visitor banner\n"
+              "  • All existing data and Excel records stay safe"
+          ),
+          font=("Segoe UI",9),
+          bg="#FEF2F2", fg="#B91C1C",
+          padx=16, pady=6, justify=LEFT).pack(anchor=W)
+
     build_bottom_bar(root, lambda: do_logout(root))
     switch_tab(0)
     root.protocol("WM_DELETE_WINDOW", lambda: do_logout(root))
@@ -2107,49 +2237,63 @@ def open_reception():
 
 
 
-    # ── Cached dataframe for speed — read Excel only every 10s not on every action ──
-    _df_cache = [None]
-    _df_cache_time = [0]
+    # ── HIGH PERFORMANCE CACHE ─────────────────────────────────
+    # Reads Excel only when data changes — not on every action
+    # openpyxl engine is 3x faster than default for reading
+    _df_cache       = [None]
+    _df_cache_time  = [0.0]
+    _CACHE_TTL      = 8   # seconds before auto-refresh
 
-    def get_cached_df():
-        """Return cached Excel df — re-reads only if older than 10 seconds."""
+    def get_cached_df(force=False):
+        """
+        Return cached visitors DataFrame.
+        Re-reads from Excel only if:
+          - cache is empty
+          - cache is older than _CACHE_TTL seconds
+          - force=True (called after save/delete)
+        """
         import time
         now = time.time()
-        if _df_cache[0] is None or (now - _df_cache_time[0]) > 10:
+        if (force or
+                _df_cache[0] is None or
+                (now - _df_cache_time[0]) > _CACHE_TTL):
             try:
-                _df_cache[0] = pd.read_excel(VISITORS_FILE(), dtype=str)
+                _df_cache[0] = pd.read_excel(
+                    VISITORS_FILE(),
+                    dtype=str,
+                    engine="openpyxl"
+                ).fillna("")
                 _df_cache_time[0] = now
-            except:
+            except Exception as _ce:
+                print(f"Cache read error: {_ce}")
                 if _df_cache[0] is None:
                     return pd.DataFrame()
-        return _df_cache[0]
+        return _df_cache[0].copy()
 
     def invalidate_cache():
-        """Call after any save/update so next read is fresh."""
+        """Force fresh read on next access — call after every save."""
         _df_cache[0] = None
+        _df_cache_time[0] = 0.0
 
     def update_stats():
         def _do_read():
             try:
-                df = pd.read_excel(VISITORS_FILE(), dtype=str)
+                df    = get_cached_df()   # uses cache — no Excel read if fresh
                 today = datetime.now().strftime(DATE_FORMAT)
                 df["Date"] = df["Date"].astype(str).str.strip()
                 df["Out"]  = df["Out"].astype(str).str.strip()
                 td    = df[df["Date"] == today]
                 still = td[td["Out"].isin(OUT_EMPTY)]
-                # Count inside — use ID Cards column (most accurate)
                 inside_count = 0
                 for _, row in still.iterrows():
                     try:
                         ids = str(row.get("ID Cards","")).strip()
                         if ids and ids not in ("","nan","NaN","None"):
-                            # Count comma/semicolon separated IDs
                             id_list = [x.strip() for x in
                                       ids.replace(";",",").split(",")
                                       if x.strip()]
                             inside_count += max(len(id_list), 1)
                         else:
-                            # Fallback: use Total Members column
                             val = str(row.get("Total Members","1")).strip()
                             if val in ("","nan","NaN","None","0"):
                                 val = "1"
@@ -2163,13 +2307,13 @@ def open_reception():
             except Exception as _se:
                 print(f"update_stats error: {_se}")
         threading.Thread(target=_do_read, daemon=True).start()
-        root.after(3000, update_stats)
+        root.after(5000, update_stats)   # every 5 seconds
     update_stats()
 
     # ── TODAY detail popup ──
     def show_today_detail():
         try:
-            df = pd.read_excel(VISITORS_FILE(), dtype=str)
+            df    = get_cached_df()   # use cache — instant
             today = datetime.now().strftime(DATE_FORMAT)
             df["Date"] = df["Date"].astype(str).str.strip()
             td = df[df["Date"] == today]
@@ -2179,7 +2323,6 @@ def open_reception():
             top.configure(bg=BG_PAGE)
             top.grab_set()
             apply_modern_style()
-            # Header
             h = Frame(top, bg=BG_HEADER, pady=10); h.pack(fill=X)
             Label(h, text=f"  📋  Today's Visitors — {today}  ({len(td)} total)",
                   font=("Segoe UI",11,"bold"), bg=BG_HEADER,
@@ -2213,7 +2356,7 @@ def open_reception():
     # ── INSIDE detail popup ──
     def show_inside_detail():
         try:
-            df = pd.read_excel(VISITORS_FILE(), dtype=str)
+            df    = get_cached_df()   # use cache — instant
             today = datetime.now().strftime(DATE_FORMAT)
             df["Date"] = df["Date"].astype(str).str.strip()
             df["Out"]  = df["Out"].astype(str).str.strip()
@@ -2249,7 +2392,6 @@ def open_reception():
                     str(r.get("Purpose","")),
                     str(r.get("Remaining",""))
                 ])
-            # Hint
             Label(top, text="💡  To exit: copy ID from above → paste in ID field → VISITOR OUT",
                   font=("Segoe UI",8,"italic"), bg=BG_PAGE,
                   fg=TEXT_MID).pack(pady=6)
@@ -2384,11 +2526,9 @@ def open_reception():
     entries["Purpose"] = purpose_cb
     _sec.row += 1
 
-    # ── VIP Code row ──
+    # ── VIP Code row — shown only if VIP system is ON ──
     vip_row_f = Frame(fb, bg="#FFFBEB",
                       highlightthickness=1, highlightbackground="#C8A84B")
-    vip_row_f.grid(row=_sec.row, column=0, columnspan=4,
-                   sticky=EW, padx=(0,16), pady=(0,8))
     vip_row_in = Frame(vip_row_f, bg="#FFFBEB", padx=10, pady=6)
     vip_row_in.pack(fill=X)
     Label(vip_row_in, text="⭐  VIP Code",
@@ -2411,7 +2551,13 @@ def open_reception():
                            font=("Segoe UI",8,"bold"),
                            bg="#FFFBEB", fg="#16A34A")
     vip_status_lbl.pack(side=RIGHT, padx=8)
-    _sec.row += 1
+
+    # Show or hide VIP row based on admin setting
+    if load_vip_enabled():
+        vip_row_f.grid(row=_sec.row, column=0, columnspan=4,
+                       sticky=EW, padx=(0,16), pady=(0,8))
+        _sec.row += 1
+    # If VIP is OFF — vip_row_f exists but not shown (so no NameError later)
 
     # ── SECTION 2: GST & Office Details ──
     _sec("GST & Office Details")
@@ -2966,7 +3112,7 @@ def open_reception():
                     df["VIP_Code"] = ""
                 df["Phone"] = df["Phone"].astype(str).str.strip()
                 df.loc[df["Phone"]==phone, "VIP_Code"] = code
-                df.to_excel(VISITORS_FILE(), index=False)
+                df.to_excel(VISITORS_FILE(), index=False, engine='openpyxl')
                 invalidate_cache()
                 messagebox.showinfo("✅  VIP Code Saved",
                     f"VIP Code  :  {code}\n"
@@ -3000,7 +3146,7 @@ def open_reception():
         if not vip_code:
             return
         try:
-            df = pd.read_excel(VISITORS_FILE(), dtype=str)
+            df = get_cached_df()   # cache
             if "VIP_Code" not in df.columns:
                 vip_status_lbl.config(
                     text="❌ No VIP records found", fg="#DC2626"); return
@@ -3091,7 +3237,7 @@ def open_reception():
         _existing_photo[0] = ""
         hide_banner()
         try:
-            df = pd.read_excel(VISITORS_FILE(), dtype=str)
+            df = get_cached_df()   # use cache — instant, no Excel read
             old = df[df["Phone"].astype(str).str.strip()==phone]
             if not old.empty:
                 last    = old.iloc[-1]
@@ -3146,7 +3292,7 @@ def open_reception():
                 # Show VIP prompt ONLY on 3rd+ visit AND no code assigned yet
                 # Once code saved — NEVER shows again (permanent)
                 has_valid_vip = bool(vip_code)
-                if visits >= 3 and not has_valid_vip:
+                if visits >= 3 and not has_valid_vip and load_vip_enabled():
                     if messagebox.askyesno(
                         "⭐ Generate VIP Code?",
                         f"Visitor  :  {vname}\n"
@@ -3311,7 +3457,7 @@ def open_reception():
 
         # ── Same phone same day warning ──
         try:
-            df_warn = pd.read_excel(VISITORS_FILE(), dtype=str)
+            df_warn = get_cached_df()   # cache — no extra read
             today_w = datetime.now().strftime(DATE_FORMAT)
             df_warn["Date"]  = df_warn["Date"].astype(str).str.strip()
             df_warn["Phone"] = df_warn["Phone"].astype(str).str.strip()
@@ -3347,7 +3493,7 @@ def open_reception():
         except Exception as _warn_err:
             print(f"Same day check error: {_warn_err}")
         try:
-            df_chk=pd.read_excel(VISITORS_FILE(),dtype=str)
+            df_chk = get_cached_df()   # cache — no extra read
             today=datetime.now().strftime(DATE_FORMAT)
             df_chk["Date"]=df_chk["Date"].astype(str).str.strip()
             df_chk["Out"] =df_chk["Out"].astype(str).str.strip()
@@ -3407,7 +3553,7 @@ def open_reception():
         }
         df=pd.read_excel(VISITORS_FILE(),dtype=str)
         df=pd.concat([df,pd.DataFrame([data])],ignore_index=True)
-        df.to_excel(VISITORS_FILE(),index=False)
+        df.to_excel(VISITORS_FILE(), index=False, engine='openpyxl')
         photo_note="\nPhoto    :  Saved ✅" if photo_path else "\nPhoto    :  Not captured"
         status_var.set(f"✅  Group {grp_id} IN — {total} person(s) at {arr_str}")
         messagebox.showinfo("✅ Visitor IN Recorded",
@@ -3484,7 +3630,7 @@ def open_reception():
                 result_parts.append(f"✅ Group {gid} ({name}) — ALL {len(all_ids)} exited\n   Arrived: {arr}  |  Final OUT: {out_time}")
             else:
                 result_parts.append(f"✅ Group {gid} ({name}) — {len(g['exiting'])} exited\n   Still inside ({len(remain)}): {', '.join(remain)}")
-        df.to_excel(VISITORS_FILE(),index=False)
+        df.to_excel(VISITORS_FILE(), index=False, engine='openpyxl')
         final="\n\n".join(result_parts)
         if not_found:   final+=f"\n\n❌ Not found: {', '.join(not_found)}"
         if already_ind: final+=f"\nℹ️ Already exited earlier: {', '.join(already_ind)}"
