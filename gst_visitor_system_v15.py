@@ -2126,8 +2126,7 @@ def open_reception():
     _menu_item(sb_menu, "⊞", "Dashboard",    active=True)
     _menu_item(sb_menu, "👥", "Visitors",     command=lambda: show_today_detail())
     _menu_item(sb_menu, "📊", "Daily Report", command=lambda: daily_report())
-    _menu_item(sb_menu, "⚙",  "Settings",    command=lambda: messagebox.showinfo(
-        "Settings", "Go to Admin login for Settings.\n\nadmin / admin123"))
+    _menu_item(sb_menu, "⚙",  "Settings",    command=lambda: _show_reception_settings())
     _menu_item(sb_menu, "⬆",  "Check Update", command=lambda: check_for_update_async(root, manual=True))
 
     # ── Logout button — prominent in sidebar ──
@@ -2275,6 +2274,157 @@ def open_reception():
         _df_cache[0] = None
         _df_cache_time[0] = 0.0
 
+    def _show_reception_settings():
+        """Reception Settings — 3 options: Change Password, About, Check Update."""
+        top = Toplevel(root)
+        top.title("Settings")
+        top.geometry("440x520")
+        top.resizable(False, False)
+        top.configure(bg="#FFFFFF")
+        top.transient(root)
+        top.grab_set()
+        top.update_idletasks()
+        sw = top.winfo_screenwidth()
+        sh = top.winfo_screenheight()
+        top.geometry(f"440x520+{(sw-440)//2}+{(sh-520)//2}")
+
+        # Header
+        hdr = Frame(top, bg="#1B2E4B"); hdr.pack(fill=X)
+        Label(hdr, text="⚙  Settings",
+              font=("Segoe UI",13,"bold"),
+              bg="#1B2E4B", fg="#C8A84B", pady=12).pack()
+
+        body = Frame(top, bg="#FFFFFF", padx=22, pady=16)
+        body.pack(fill=BOTH, expand=True)
+
+        # ── OPTION 1: Change My Password ─────────────────────────
+        pw_card = Frame(body, bg="#F8FAFF",
+                        highlightthickness=1, highlightbackground="#E2E8F0")
+        pw_card.pack(fill=X, pady=(0,14))
+        pw_in = Frame(pw_card, bg="#F8FAFF", padx=16, pady=14)
+        pw_in.pack(fill=X)
+
+        Label(pw_in, text="🔑  Change My Password",
+              font=("Segoe UI",10,"bold"),
+              bg="#F8FAFF", fg="#1E293B").pack(anchor=W)
+        Label(pw_in, text="Change your login password securely.",
+              font=("Segoe UI",8,"italic"),
+              bg="#F8FAFF", fg="#94A3B8").pack(anchor=W, pady=(2,10))
+
+        Label(pw_in, text="Current Password:",
+              font=("Segoe UI",9), bg="#F8FAFF", fg="#475569").pack(anchor=W)
+        cur_pw = Entry(pw_in, show="●", font=("Segoe UI",10),
+                       relief=FLAT, bg="#FFFFFF",
+                       highlightthickness=1, highlightbackground="#CBD5E1",
+                       highlightcolor="#2563EB")
+        cur_pw.pack(fill=X, ipady=6, pady=(2,8))
+
+        Label(pw_in, text="New Password:",
+              font=("Segoe UI",9), bg="#F8FAFF", fg="#475569").pack(anchor=W)
+        new_pw = Entry(pw_in, show="●", font=("Segoe UI",10),
+                       relief=FLAT, bg="#FFFFFF",
+                       highlightthickness=1, highlightbackground="#CBD5E1",
+                       highlightcolor="#2563EB")
+        new_pw.pack(fill=X, ipady=6, pady=(2,8))
+
+        Label(pw_in, text="Confirm New Password:",
+              font=("Segoe UI",9), bg="#F8FAFF", fg="#475569").pack(anchor=W)
+        con_pw = Entry(pw_in, show="●", font=("Segoe UI",10),
+                       relief=FLAT, bg="#FFFFFF",
+                       highlightthickness=1, highlightbackground="#CBD5E1",
+                       highlightcolor="#2563EB")
+        con_pw.pack(fill=X, ipady=6, pady=(2,8))
+
+        pw_msg = Label(pw_in, text="", font=("Segoe UI",8,"bold"),
+                       bg="#F8FAFF", fg="#DC2626")
+        pw_msg.pack(anchor=W)
+
+        def _change_password():
+            cur = cur_pw.get().strip()
+            nw  = new_pw.get().strip()
+            cn  = con_pw.get().strip()
+            if not cur or not nw or not cn:
+                pw_msg.config(text="❌  All fields are required.", fg="#DC2626")
+                return
+            if nw != cn:
+                pw_msg.config(text="❌  New passwords do not match.", fg="#DC2626")
+                return
+            if len(nw) < 3:
+                pw_msg.config(text="❌  Password too short (min 3 chars).", fg="#DC2626")
+                return
+            try:
+                uname = session.get("username","")
+                df = pd.read_excel(USERS_FILE(), dtype=str)
+                df["Username"] = df["Username"].astype(str).str.strip()
+                df["Password"] = df["Password"].astype(str).str.strip()
+                match = df[(df["Username"]==uname) & (df["Password"]==cur)]
+                if match.empty:
+                    pw_msg.config(text="❌  Current password is wrong.", fg="#DC2626")
+                    return
+                df.loc[df["Username"]==uname, "Password"] = nw
+                df.to_excel(USERS_FILE(), index=False, engine="openpyxl")
+                cur_pw.delete(0,END)
+                new_pw.delete(0,END)
+                con_pw.delete(0,END)
+                pw_msg.config(text="✅  Password changed successfully!", fg="#16A34A")
+            except Exception as ex:
+                pw_msg.config(text=f"❌  Error: {ex}", fg="#DC2626")
+
+        make_button(pw_in, "🔑  Change Password", ACCENT_BLUE,
+                    command=_change_password,
+                    padx=14, pady=7).pack(anchor=W, pady=(6,0))
+
+        # ── OPTION 2: About / Software Info ──────────────────────
+        ab_card = Frame(body, bg="#F0FDF4",
+                        highlightthickness=1, highlightbackground="#BBF7D0")
+        ab_card.pack(fill=X, pady=(0,14))
+        ab_in = Frame(ab_card, bg="#F0FDF4", padx=16, pady=12)
+        ab_in.pack(fill=X)
+
+        Label(ab_in, text="ℹ️  About This Software",
+              font=("Segoe UI",10,"bold"),
+              bg="#F0FDF4", fg="#15803D").pack(anchor=W)
+        Label(ab_in,
+              text=(
+                  f"GST Visitor Management System\n"
+                  f"Version      :  {CURRENT_VERSION}\n"
+                  f"Developer   :  Udbhav K\n"
+                  f"Department :  GST Department Karnataka\n"
+                  f"Build          :  April 2026"
+              ),
+              font=("Segoe UI",9),
+              bg="#F0FDF4", fg="#16A34A",
+              justify=LEFT).pack(anchor=W, pady=(6,0))
+
+        # ── OPTION 5: Check for Update ───────────────────────────
+        upd_card = Frame(body, bg="#EFF6FF",
+                         highlightthickness=1, highlightbackground="#BFDBFE")
+        upd_card.pack(fill=X)
+        upd_in = Frame(upd_card, bg="#EFF6FF", padx=16, pady=12)
+        upd_in.pack(fill=X)
+
+        Label(upd_in, text="⬆  Software Update",
+              font=("Segoe UI",10,"bold"),
+              bg="#EFF6FF", fg="#1E40AF").pack(anchor=W)
+        Label(upd_in,
+              text="Check if a newer version is available online.\n"
+                   "Update downloads and installs automatically.",
+              font=("Segoe UI",9),
+              bg="#EFF6FF", fg="#1D4ED8",
+              justify=LEFT).pack(anchor=W, pady=(4,8))
+
+        make_button(upd_in, "⬆  Check for Update Now", ACCENT_BLUE,
+                    command=lambda: [top.destroy(),
+                                     check_for_update_async(root, manual=True)],
+                    padx=14, pady=8).pack(anchor=W)
+
+        # Close button
+        Frame(top, bg="#E2E8F0", height=1).pack(fill=X)
+        close_f = Frame(top, bg="#FFFFFF", pady=10); close_f.pack(fill=X)
+        make_button(close_f, "✕  Close", BTN_CLEAR,
+                    command=top.destroy,
+                    padx=16, pady=8).pack(side=RIGHT, padx=16)
+
     def update_stats():
         def _do_read():
             try:
@@ -2312,44 +2462,258 @@ def open_reception():
 
     # ── TODAY detail popup ──
     def show_today_detail():
+        """Full visitor report popup — date filter, all data, save to PDF/Excel."""
         try:
-            df    = get_cached_df()   # use cache — instant
-            today = datetime.now().strftime(DATE_FORMAT)
-            df["Date"] = df["Date"].astype(str).str.strip()
-            td = df[df["Date"] == today]
             top = Toplevel(root)
-            top.title(f"Today's Visitors — {today}")
-            top.geometry("820x420")
+            top.title("Visitor Report")
+            top.geometry("1100x620")
             top.configure(bg=BG_PAGE)
             top.grab_set()
             apply_modern_style()
+
+            today = datetime.now().strftime(DATE_FORMAT)
+
+            # ── Header ──
             h = Frame(top, bg=BG_HEADER, pady=10); h.pack(fill=X)
-            Label(h, text=f"  📋  Today's Visitors — {today}  ({len(td)} total)",
-                  font=("Segoe UI",11,"bold"), bg=BG_HEADER,
-                  fg=TEXT_WHITE, pady=6).pack(side=LEFT)
+            Label(h, text="  📋  Visitor Report",
+                  font=("Segoe UI",12,"bold"),
+                  bg=BG_HEADER, fg=TEXT_WHITE).pack(side=LEFT, pady=4)
             Button(h, text="✕ Close", font=("Segoe UI",9),
                    bg=BG_HEADER, fg="#93C5FD", relief=FLAT,
                    cursor="hand2", command=top.destroy).pack(side=RIGHT, padx=14)
-            if td.empty:
-                Label(top, text="No visitors today.",
-                      font=("Segoe UI",10), bg=BG_PAGE,
-                      fg=TEXT_MID).pack(pady=30)
-                return
-            cols = ["Group ID","Arrival","Out","Visitor","Phone","ID Cards","Company","Purpose"]
-            t = build_treeview(top, cols, height=12)
-            for _, r in td.iterrows():
-                out_v = str(r.get("Out","")).strip()
-                status = out_v if out_v not in OUT_EMPTY else "Inside ✅"
-                t.insert("", END, values=[
-                    str(r.get("Group ID","")),
-                    str(r.get("Arrival","")),
-                    status,
-                    str(r.get("Visitor","")),
-                    str(r.get("Phone","")),
-                    str(r.get("ID Cards","")),
-                    str(r.get("Company","")),
-                    str(r.get("Purpose",""))
-                ])
+
+            # ── Filter bar ──
+            fbar = Frame(top, bg=BG_CARD,
+                         highlightthickness=1, highlightbackground=BORDER_CLR)
+            fbar.pack(fill=X, padx=12, pady=(8,0))
+            fi = Frame(fbar, bg=BG_CARD, padx=12, pady=8); fi.pack(fill=X)
+
+            Label(fi, text="From:", font=("Segoe UI",9,"bold"),
+                  bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
+            from_var = StringVar(value=today)
+            Entry(fi, textvariable=from_var, width=12,
+                  font=("Segoe UI",9), relief=FLAT,
+                  bg=FIELD_BG, fg=TEXT_DARK,
+                  highlightthickness=1,
+                  highlightbackground=BORDER_CLR).pack(side=LEFT, padx=(4,12), ipady=4)
+
+            Label(fi, text="To:", font=("Segoe UI",9,"bold"),
+                  bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
+            to_var = StringVar(value=today)
+            Entry(fi, textvariable=to_var, width=12,
+                  font=("Segoe UI",9), relief=FLAT,
+                  bg=FIELD_BG, fg=TEXT_DARK,
+                  highlightthickness=1,
+                  highlightbackground=BORDER_CLR).pack(side=LEFT, padx=(4,12), ipady=4)
+
+            Label(fi, text="dd-mm-yyyy", font=("Segoe UI",7,"italic"),
+                  bg=BG_CARD, fg=TEXT_LIGHT).pack(side=LEFT, padx=(0,16))
+
+            # Type filter
+            Label(fi, text="Type:", font=("Segoe UI",9,"bold"),
+                  bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
+            type_var = StringVar(value="All")
+            type_cb = ttk.Combobox(fi, textvariable=type_var, width=10,
+                                   state="readonly",
+                                   values=["All","Inside","Exited"])
+            type_cb.pack(side=LEFT, padx=(4,12))
+
+            # Result count label
+            count_var = StringVar(value="")
+            Label(fi, textvariable=count_var,
+                  font=("Segoe UI",9,"bold"),
+                  bg=BG_CARD, fg=ACCENT_BLUE).pack(side=LEFT, padx=(8,0))
+
+            # ── Treeview ──
+            cols = ["Date","Group ID","Arrival","Out","Visitor",
+                    "Phone","ID Cards","Company","Purpose","Officer"]
+            tree_frame = Frame(top, bg=BG_PAGE)
+            tree_frame.pack(fill=BOTH, expand=True, padx=12, pady=6)
+            tv = build_treeview(tree_frame, cols, height=16)
+
+            _filtered_df = [None]   # store for PDF/Excel save
+
+            def _apply_filter(*_):
+                for row in tv.get_children(): tv.delete(row)
+                try:
+                    df_all = pd.read_excel(VISITORS_FILE(), dtype=str,
+                                           engine="openpyxl").fillna("")
+                    df_all["Date"] = df_all["Date"].astype(str).str.strip()
+                    df_all["Out"]  = df_all["Out"].astype(str).str.strip()
+
+                    # Date filter
+                    try:
+                        fd = datetime.strptime(from_var.get().strip(), DATE_FORMAT)
+                        td2 = datetime.strptime(to_var.get().strip(), DATE_FORMAT)
+                    except:
+                        messagebox.showwarning("Date Format",
+                            "Use dd-mm-yyyy format.\nExample: 15-04-2026",
+                            parent=top)
+                        return
+
+                    mask = df_all["Date"].apply(
+                        lambda d: _in_range(d, fd, td2))
+                    df_f = df_all[mask].copy()
+
+                    # Type filter
+                    t_sel = type_var.get()
+                    if t_sel == "Inside":
+                        df_f = df_f[df_f["Out"].isin(OUT_EMPTY)]
+                    elif t_sel == "Exited":
+                        df_f = df_f[~df_f["Out"].isin(OUT_EMPTY)]
+
+                    _filtered_df[0] = df_f
+                    count_var.set(f"{len(df_f)} record(s)")
+
+                    for _, r in df_f.iterrows():
+                        out_v = str(r.get("Out","")).strip()
+                        status = out_v if out_v not in OUT_EMPTY else "Inside ✅"
+                        tv.insert("", END, values=[
+                            str(r.get("Date","")),
+                            str(r.get("Group ID","")),
+                            str(r.get("Arrival","")),
+                            status,
+                            str(r.get("Visitor","")),
+                            str(r.get("Phone","")),
+                            str(r.get("ID Cards","")),
+                            str(r.get("Company","")),
+                            str(r.get("Purpose","")),
+                            str(r.get("Officer",""))
+                        ])
+                except Exception as ex:
+                    messagebox.showerror("Error", str(ex), parent=top)
+
+            def _in_range(d_str, fd, td2):
+                try:
+                    d = datetime.strptime(d_str.strip(), DATE_FORMAT)
+                    return fd <= d <= td2
+                except: return False
+
+            # Filter buttons
+            make_button(fi, "🔍  Search", BTN_SEARCH,
+                        command=_apply_filter,
+                        padx=12, pady=6).pack(side=LEFT, padx=(8,4))
+
+            def _save_excel():
+                if _filtered_df[0] is None or _filtered_df[0].empty:
+                    messagebox.showwarning("Empty",
+                        "No data to save. Run Search first.", parent=top)
+                    return
+                from tkinter import filedialog
+                fp = filedialog.asksaveasfilename(
+                    parent=top,
+                    title="Save Report as Excel",
+                    defaultextension=".xlsx",
+                    initialfile=f"GST_Report_{from_var.get()}_{to_var.get()}",
+                    filetypes=[("Excel","*.xlsx"),("All","*.*")])
+                if not fp: return
+                try:
+                    df_save = _filtered_df[0]
+                    df_save.to_excel(fp, index=False, engine="openpyxl")
+                    # Style it
+                    from openpyxl import load_workbook
+                    from openpyxl.styles import PatternFill,Font,Alignment,Border,Side
+                    wb = load_workbook(fp); ws = wb.active
+                    hf  = PatternFill("solid", fgColor="1E3A5F")
+                    hft = Font(bold=True, color="FFFFFF",
+                               name="Segoe UI", size=10)
+                    th  = Side(style="thin", color="D1D5DB")
+                    bd  = Border(left=th,right=th,top=th,bottom=th)
+                    for c in ws[1]:
+                        c.fill=hf; c.font=hft
+                        c.alignment=Alignment(horizontal="center")
+                        c.border=bd
+                    for row in ws.iter_rows(min_row=2):
+                        for c in row:
+                            c.alignment=Alignment(horizontal="center")
+                            c.border=bd
+                            if c.row%2==0:
+                                c.fill=PatternFill("solid",fgColor="EFF6FF")
+                    for col in ws.columns:
+                        ml=max((len(str(c.value)) if c.value else 0) for c in col)
+                        ws.column_dimensions[col[0].column_letter].width=min(ml+4,30)
+                    wb.save(fp)
+                    if messagebox.askyesno("✅ Saved",
+                        f"Saved {len(df_save)} records.\n\n{fp}\n\nOpen now?",
+                        parent=top):
+                        os.startfile(fp)
+                except Exception as ex:
+                    messagebox.showerror("Error", str(ex), parent=top)
+
+            def _save_pdf():
+                if _filtered_df[0] is None or _filtered_df[0].empty:
+                    messagebox.showwarning("Empty",
+                        "No data to save. Run Search first.", parent=top)
+                    return
+                from tkinter import filedialog
+                fp = filedialog.asksaveasfilename(
+                    parent=top,
+                    title="Save Report as PDF",
+                    defaultextension=".pdf",
+                    initialfile=f"GST_Report_{from_var.get()}_{to_var.get()}",
+                    filetypes=[("PDF","*.pdf"),("All","*.*")])
+                if not fp: return
+                try:
+                    # Save as Excel first, then convert using openpyxl
+                    # Pure Python PDF without reportlab
+                    import tkinter as _tk
+                    df_pdf = _filtered_df[0]
+                    # Build HTML then save — simpler and works everywhere
+                    html_fp = fp.replace(".pdf",".html")
+                    html = ["<html><head><style>",
+                            "body{font-family:Arial,sans-serif;font-size:11px}",
+                            "h2{color:#1E3A5F}",
+                            "table{border-collapse:collapse;width:100%}",
+                            "th{background:#1E3A5F;color:white;padding:6px;text-align:center}",
+                            "td{border:1px solid #D1D5DB;padding:5px;text-align:center}",
+                            "tr:nth-child(even){background:#EFF6FF}",
+                            "</style></head><body>",
+                            f"<h2>GST Department — Visitor Report</h2>",
+                            f"<p>Period: {from_var.get()} to {to_var.get()} | "
+                            f"Total: {len(df_pdf)} records | "
+                            f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}</p>",
+                            "<table><tr>"]
+                    show_cols = ["Date","Group ID","Arrival","Out","Visitor",
+                                 "Phone","Company","Purpose","Officer"]
+                    for c in show_cols:
+                        html.append(f"<th>{c}</th>")
+                    html.append("</tr>")
+                    for _, r in df_pdf.iterrows():
+                        html.append("<tr>")
+                        for c in show_cols:
+                            val = str(r.get(c,"")).strip()
+                            if c == "Out" and val in OUT_EMPTY:
+                                val = "Inside"
+                            html.append(f"<td>{val}</td>")
+                        html.append("</tr>")
+                    html.append("</table></body></html>")
+                    # Save HTML file
+                    with open(html_fp,"w",encoding="utf-8") as hf_out:
+                        hf_out.write("".join(html))
+                    # Open in browser — user can Print → Save as PDF
+                    import webbrowser
+                    webbrowser.open(html_fp)
+                    messagebox.showinfo("📄 Report Ready",
+                        "Report opened in your browser.\n\n"
+                        "To save as PDF:\n"
+                        "  Press Ctrl+P → Change destination\n"
+                        "  → 'Save as PDF' → Save\n\n"
+                        f"HTML saved at: {html_fp}",
+                        parent=top)
+                except Exception as ex:
+                    messagebox.showerror("Error", str(ex), parent=top)
+
+            # Save buttons
+            make_button(fi, "💾  Save Excel", BTN_IN,
+                        command=_save_excel,
+                        padx=12, pady=6).pack(side=LEFT, padx=4)
+            make_button(fi, "📄  Save PDF", "#7C3AED",
+                        command=_save_pdf,
+                        padx=12, pady=6).pack(side=LEFT, padx=4)
+
+            # Load today's data immediately
+            _apply_filter()
+
         except Exception as ex:
             messagebox.showerror("Error", str(ex))
 
@@ -3249,7 +3613,22 @@ def open_reception():
                 officer = str(last.get("Officer","")).strip()
                 division= str(last.get("Division","")).strip()
                 room    = str(last.get("Room No","")).strip()
-                photo_p = str(last.get("Photo","")).strip()
+
+                # ── Photo: search ALL visits to find first valid photo ──
+                # (last visit may not have photo, but 1st visit always does)
+                photo_p = ""
+                for _, visit_row in old.iterrows():
+                    raw_p = str(visit_row.get("Photo","")).strip()
+                    if raw_p in ("","nan","NaN","None"): continue
+                    # Resolve: if file path → get folder, if folder → use directly
+                    if os.path.isdir(raw_p):
+                        photo_p = raw_p; break
+                    elif os.path.isfile(raw_p):
+                        photo_p = os.path.dirname(raw_p); break
+                    elif os.path.isdir(os.path.dirname(raw_p)):
+                        # path stored but file deleted — use folder
+                        photo_p = os.path.dirname(raw_p); break
+
                 # Safe VIP code read — handles missing column and nan values
                 if "VIP_Code" in df.columns:
                     _vc = str(last.get("VIP_Code","")).strip()
