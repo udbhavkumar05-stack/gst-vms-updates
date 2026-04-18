@@ -1,4 +1,4 @@
-v17
+v18
 Visitor report calendar date picker added
 All data loads automatically on open
 Green dots on dates that have visitor data
