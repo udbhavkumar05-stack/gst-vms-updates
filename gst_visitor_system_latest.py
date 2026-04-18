@@ -48,7 +48,7 @@ def save_vip_enabled(enabled: bool):
         return False
 
 # ── Version & Auto-Update ──────────────────────────────────────
-CURRENT_VERSION  = "v16"
+CURRENT_VERSION  = "v17"
 _GH_USER     = "udbhavkumar05-stack"
 _GH_REPO     = "gst-vms-updates"
 _GH_RAW      = (f"https://raw.githubusercontent.com/"
@@ -1637,6 +1637,126 @@ def open_admin():
     make_button(bbr, "🔄  Run Manual Backup", BTN_SEARCH,
                 command=manual_backup, padx=14, pady=9).pack(side=LEFT)
 
+    # ── IMPORT VISITOR DATA ──────────────────────────────────────
+    Frame(bk_inner, bg=BORDER_CLR, height=1).pack(fill=X, pady=(20,12))
+
+    imp_box = Frame(bk_inner, bg="#FFF7ED",
+                    highlightthickness=1, highlightbackground="#FCD34D")
+    imp_box.pack(fill=X, pady=(0,10))
+    imp_in = Frame(imp_box, bg="#FFF7ED", padx=16, pady=14)
+    imp_in.pack(fill=X)
+
+    Label(imp_in, text="📥  Import Visitor Data from Backup",
+          font=("Segoe UI",11,"bold"),
+          bg="#FFF7ED", fg="#92400E").pack(anchor=W)
+    Label(imp_in,
+          text="Use this if visitor data is not showing after reinstall.\n"
+               "Select your backup Excel file (GST_Visitors_Backup_*.xlsx)\n"
+               "from the GST_Backups folder.",
+          font=("Segoe UI",9),
+          bg="#FFF7ED", fg="#92400E",
+          justify=LEFT).pack(anchor=W, pady=(6,12))
+
+    imp_status = Label(imp_in, text="",
+                       font=("Segoe UI",9,"bold"),
+                       bg="#FFF7ED", fg="#16A34A")
+    imp_status.pack(anchor=W, pady=(0,8))
+
+    def import_visitor_data():
+        from tkinter import filedialog
+        fp = filedialog.askopenfilename(
+            parent=root,
+            title="Select Visitor Backup Excel File",
+            filetypes=[("Excel Files","*.xlsx *.xls"),("All Files","*.*")])
+        if not fp: return
+        try:
+            # Read the backup file
+            df_bk = pd.read_excel(fp, dtype=str, engine="openpyxl").fillna("")
+            if df_bk.empty:
+                messagebox.showwarning("Empty File",
+                    "The selected file has no data.", parent=root)
+                return
+
+            # Check it looks like visitor data
+            expected_cols = ["Group ID","Visitor","Phone","Date","Arrival"]
+            missing = [c for c in expected_cols if c not in df_bk.columns]
+            if missing:
+                messagebox.showwarning("Wrong File",
+                    f"This does not look like a visitor data file.\n\n"
+                    f"Missing columns: {', '.join(missing)}\n\n"
+                    f"Please select a GST_Visitors backup file.",
+                    parent=root)
+                return
+
+            dest = VISITORS_FILE()
+
+            # If current file exists — merge (keep existing + add missing records)
+            if os.path.exists(dest):
+                choice = messagebox.askyesnocancel(
+                    "Import Option",
+                    f"Current visitor file exists.\n\n"
+                    f"YES   = Merge backup with current data\n"
+                    f"       (keeps all existing + adds missing records)\n\n"
+                    f"NO    = Replace current file with backup\n"
+                    f"       (backup becomes the main file)\n\n"
+                    f"CANCEL = Do nothing",
+                    parent=root)
+                if choice is None: return
+
+                if choice:  # YES — merge
+                    df_cur = pd.read_excel(dest, dtype=str,
+                                           engine="openpyxl").fillna("")
+                    # Merge: current + backup, remove duplicates by Group ID
+                    df_merged = pd.concat([df_cur, df_bk], ignore_index=True)
+                    if "Group ID" in df_merged.columns:
+                        df_merged = df_merged.drop_duplicates(
+                            subset=["Group ID"], keep="first")
+                    df_merged.to_excel(dest, index=False, engine="openpyxl")
+                    total = len(df_merged)
+                    imp_status.config(
+                        text=f"✅  Merged — {total} total records in visitor file.",
+                        fg="#16A34A")
+                    messagebox.showinfo("✅ Import Complete",
+                        f"Merge successful!\n\n"
+                        f"Total records: {total}\n\n"
+                        f"Data is now showing in the system.",
+                        parent=root)
+                else:  # NO — replace
+                    # Backup current first
+                    import shutil as _sh
+                    bak = dest + ".pre_import_backup"
+                    _sh.copy2(dest, bak)
+                    df_bk.to_excel(dest, index=False, engine="openpyxl")
+                    imp_status.config(
+                        text=f"✅  Replaced — {len(df_bk)} records imported.",
+                        fg="#16A34A")
+                    messagebox.showinfo("✅ Import Complete",
+                        f"File replaced successfully!\n\n"
+                        f"Records imported: {len(df_bk)}\n\n"
+                        f"Previous file backed up as .pre_import_backup",
+                        parent=root)
+            else:
+                # No current file — just copy backup as main file
+                df_bk.to_excel(dest, index=False, engine="openpyxl")
+                imp_status.config(
+                    text=f"✅  {len(df_bk)} records imported successfully.",
+                    fg="#16A34A")
+                messagebox.showinfo("✅ Import Complete",
+                    f"Visitor data imported!\n\n"
+                    f"Records: {len(df_bk)}\n\n"
+                    f"Data is now visible in the system.",
+                    parent=root)
+
+        except Exception as ex:
+            imp_status.config(text=f"❌  Error: {ex}", fg="#DC2626")
+            messagebox.showerror("Import Error",
+                f"Could not import data.\n\nReason:\n{ex}",
+                parent=root)
+
+    make_button(imp_in, "📥  Select & Import Backup File", "#D97706",
+                command=import_visitor_data,
+                padx=16, pady=10).pack(anchor=W)
+
     # ── TAB 5 — Purpose List ──
     _tab_title(t_pur, "📋  Purpose Dropdown Manager")
     pur_card = make_card(t_pur)
@@ -2512,20 +2632,36 @@ def open_reception():
 
     # ── TODAY detail popup ──
     def show_today_detail():
-        """Full visitor report popup — date filter, all data, save to PDF/Excel."""
+        """Visitor Report — calendar picker, all data by default, PDF save, read-only."""
         try:
             top = Toplevel(root)
             top.title("Visitor Report")
-            top.geometry("1100x620")
+            top.geometry("1150x660")
             top.configure(bg=BG_PAGE)
             top.grab_set()
             apply_modern_style()
 
-            today = datetime.now().strftime(DATE_FORMAT)
+            # Load ALL data first to get date range
+            try:
+                df_all = pd.read_excel(VISITORS_FILE(), dtype=str,
+                                       engine="openpyxl").fillna("")
+                df_all["Date"] = df_all["Date"].astype(str).str.strip()
+                df_all["Out"]  = df_all["Out"].astype(str).str.strip()
+                all_dates = []
+                for d in df_all["Date"].unique():
+                    try:
+                        all_dates.append(datetime.strptime(d, DATE_FORMAT))
+                    except: pass
+                first_date = min(all_dates).strftime(DATE_FORMAT) if all_dates else datetime.now().strftime(DATE_FORMAT)
+            except:
+                df_all = pd.DataFrame()
+                first_date = datetime.now().strftime(DATE_FORMAT)
+
+            today_str = datetime.now().strftime(DATE_FORMAT)
 
             # ── Header ──
             h = Frame(top, bg=BG_HEADER, pady=10); h.pack(fill=X)
-            Label(h, text="  📋  Visitor Report",
+            Label(h, text="  📋  Visitor Report  —  All Records (Read Only)",
                   font=("Segoe UI",12,"bold"),
                   bg=BG_HEADER, fg=TEXT_WHITE).pack(side=LEFT, pady=4)
             Button(h, text="✕ Close", font=("Segoe UI",9),
@@ -2538,74 +2674,226 @@ def open_reception():
             fbar.pack(fill=X, padx=12, pady=(8,0))
             fi = Frame(fbar, bg=BG_CARD, padx=12, pady=8); fi.pack(fill=X)
 
+            from_var = StringVar(value=first_date)
+            to_var   = StringVar(value=today_str)
+            count_var= StringVar(value="")
+            _filtered_df = [None]
+
+            # ── Calendar popup ──
+            _cal_popup = [None]
+
+            def _show_calendar(target_var, anchor_widget):
+                """Show calendar popup for date selection."""
+                if _cal_popup[0]:
+                    try: _cal_popup[0].destroy()
+                    except: pass
+                    _cal_popup[0] = None
+                    return
+
+                cal = Toplevel(top)
+                cal.overrideredirect(True)
+                cal.configure(bg="#FFFFFF")
+                cal.attributes("-topmost", True)
+                _cal_popup[0] = cal
+
+                # Position below anchor widget
+                ax = anchor_widget.winfo_rootx()
+                ay = anchor_widget.winfo_rooty() + anchor_widget.winfo_height() + 2
+                cal.geometry(f"220x240+{ax}+{ay}")
+
+                # State
+                try:
+                    cur = datetime.strptime(target_var.get(), DATE_FORMAT)
+                except:
+                    cur = datetime.now()
+                _cal_month = [cur.year, cur.month]
+
+                # Get dates that have visitor data (for green highlight)
+                data_dates = set()
+                for d in df_all["Date"].unique() if not df_all.empty else []:
+                    try:
+                        data_dates.add(datetime.strptime(d.strip(), DATE_FORMAT).date())
+                    except: pass
+
+                cal_frame = Frame(cal, bg="#FFFFFF"); cal_frame.pack(fill=BOTH, expand=True, padx=6, pady=6)
+
+                def _render_cal():
+                    for w in cal_frame.winfo_children(): w.destroy()
+
+                    y, m = _cal_month
+                    import calendar as _cal
+                    month_name = datetime(y, m, 1).strftime("%B %Y")
+
+                    # Header row
+                    nav = Frame(cal_frame, bg="#FFFFFF"); nav.pack(fill=X, pady=(0,4))
+                    Button(nav, text="‹", font=("Segoe UI",12,"bold"),
+                           bg="#FFFFFF", fg="#2563EB", relief=FLAT, bd=0,
+                           command=lambda: _prev_month()).pack(side=LEFT)
+                    Label(nav, text=month_name,
+                          font=("Segoe UI",9,"bold"),
+                          bg="#FFFFFF", fg="#1E293B").pack(side=LEFT, expand=True)
+                    Button(nav, text="›", font=("Segoe UI",12,"bold"),
+                           bg="#FFFFFF", fg="#2563EB", relief=FLAT, bd=0,
+                           command=lambda: _next_month()).pack(side=RIGHT)
+
+                    # Day of week headers
+                    days_grid = Frame(cal_frame, bg="#FFFFFF"); days_grid.pack(fill=X)
+                    for dow in ["Su","Mo","Tu","We","Th","Fr","Sa"]:
+                        Label(days_grid, text=dow,
+                              font=("Segoe UI",7,"bold"),
+                              bg="#FFFFFF", fg="#94A3B8",
+                              width=3).pack(side=LEFT)
+
+                    # Days grid
+                    import calendar as _cal
+                    first_dow = _cal.monthrange(y, m)[0]  # 0=Mon
+                    first_dow = (first_dow + 1) % 7       # Convert to Sun=0
+                    days_in_month = _cal.monthrange(y, m)[1]
+
+                    row_f = Frame(cal_frame, bg="#FFFFFF"); row_f.pack(fill=X)
+                    col = 0
+
+                    # Empty cells before first day
+                    for _ in range(first_dow):
+                        Label(row_f, text="", width=3, bg="#FFFFFF").pack(side=LEFT)
+                        col += 1
+
+                    today_date = datetime.now().date()
+
+                    for day in range(1, days_in_month + 1):
+                        if col % 7 == 0 and col > 0:
+                            row_f = Frame(cal_frame, bg="#FFFFFF"); row_f.pack(fill=X)
+
+                        d_date = datetime(y, m, day).date()
+                        is_today    = d_date == today_date
+                        has_data    = d_date in data_dates
+
+                        try:
+                            selected_d = datetime.strptime(target_var.get(), DATE_FORMAT).date()
+                            is_selected = d_date == selected_d
+                        except:
+                            is_selected = False
+
+                        if is_selected:
+                            bg_c = "#2563EB"; fg_c = "#FFFFFF"
+                        elif is_today:
+                            bg_c = "#EFF6FF"; fg_c = "#2563EB"
+                        elif has_data:
+                            bg_c = "#F0FDF4"; fg_c = "#16A34A"
+                        else:
+                            bg_c = "#FFFFFF"; fg_c = "#475569"
+
+                        fw = "bold" if (has_data or is_selected or is_today) else "normal"
+
+                        def _pick(d=day, _y=y, _m=m):
+                            target_var.set(datetime(_y, _m, d).strftime(DATE_FORMAT))
+                            try: cal.destroy()
+                            except: pass
+                            _cal_popup[0] = None
+
+                        btn = Button(row_f, text=str(day),
+                                     font=("Segoe UI",8,fw),
+                                     bg=bg_c, fg=fg_c,
+                                     width=3, relief=FLAT, bd=0,
+                                     cursor="hand2",
+                                     command=_pick)
+                        btn.pack(side=LEFT)
+                        col += 1
+
+                    # Legend
+                    leg = Frame(cal_frame, bg="#FFFFFF"); leg.pack(fill=X, pady=(4,0))
+                    Label(leg, text="● Has data",
+                          font=("Segoe UI",7), bg="#FFFFFF", fg="#16A34A").pack(side=LEFT)
+                    Label(leg, text="  ● Today",
+                          font=("Segoe UI",7), bg="#FFFFFF", fg="#2563EB").pack(side=LEFT)
+
+                def _prev_month():
+                    if _cal_month[1] == 1:
+                        _cal_month[0] -= 1; _cal_month[1] = 12
+                    else:
+                        _cal_month[1] -= 1
+                    _render_cal()
+
+                def _next_month():
+                    if _cal_month[1] == 12:
+                        _cal_month[0] += 1; _cal_month[1] = 1
+                    else:
+                        _cal_month[1] += 1
+                    _render_cal()
+
+                _render_cal()
+                cal.bind("<FocusOut>", lambda e: (cal.destroy(), _cal_popup.__setitem__(0, None)))
+
+            # ── From date button ──
             Label(fi, text="From:", font=("Segoe UI",9,"bold"),
                   bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
-            from_var = StringVar(value=today)
-            Entry(fi, textvariable=from_var, width=12,
-                  font=("Segoe UI",9), relief=FLAT,
-                  bg=FIELD_BG, fg=TEXT_DARK,
-                  highlightthickness=1,
-                  highlightbackground=BORDER_CLR).pack(side=LEFT, padx=(4,12), ipady=4)
+            from_btn = Button(fi, textvariable=from_var,
+                              font=("Segoe UI",9,"bold"),
+                              bg="#EFF6FF", fg="#1E40AF",
+                              relief=FLAT, cursor="hand2",
+                              padx=10, pady=5,
+                              bd=1, highlightbackground="#BFDBFE",
+                              highlightthickness=1)
+            from_btn.pack(side=LEFT, padx=(4,10))
+            from_btn.config(command=lambda: _show_calendar(from_var, from_btn))
 
             Label(fi, text="To:", font=("Segoe UI",9,"bold"),
                   bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
-            to_var = StringVar(value=today)
-            Entry(fi, textvariable=to_var, width=12,
-                  font=("Segoe UI",9), relief=FLAT,
-                  bg=FIELD_BG, fg=TEXT_DARK,
-                  highlightthickness=1,
-                  highlightbackground=BORDER_CLR).pack(side=LEFT, padx=(4,12), ipady=4)
+            to_btn = Button(fi, textvariable=to_var,
+                            font=("Segoe UI",9,"bold"),
+                            bg="#EFF6FF", fg="#1E40AF",
+                            relief=FLAT, cursor="hand2",
+                            padx=10, pady=5,
+                            bd=1, highlightbackground="#BFDBFE",
+                            highlightthickness=1)
+            to_btn.pack(side=LEFT, padx=(4,12))
+            to_btn.config(command=lambda: _show_calendar(to_var, to_btn))
 
-            Label(fi, text="dd-mm-yyyy", font=("Segoe UI",7,"italic"),
-                  bg=BG_CARD, fg=TEXT_LIGHT).pack(side=LEFT, padx=(0,16))
-
-            # Type filter
             Label(fi, text="Type:", font=("Segoe UI",9,"bold"),
                   bg=BG_CARD, fg=TEXT_DARK).pack(side=LEFT)
             type_var = StringVar(value="All")
-            type_cb = ttk.Combobox(fi, textvariable=type_var, width=10,
-                                   state="readonly",
-                                   values=["All","Inside","Exited"])
+            type_cb  = ttk.Combobox(fi, textvariable=type_var, width=10,
+                                    state="readonly",
+                                    values=["All","Inside","Exited"])
             type_cb.pack(side=LEFT, padx=(4,12))
 
-            # Result count label
-            count_var = StringVar(value="")
-            Label(fi, textvariable=count_var,
-                  font=("Segoe UI",9,"bold"),
-                  bg=BG_CARD, fg=ACCENT_BLUE).pack(side=LEFT, padx=(8,0))
+            count_lbl = Label(fi, textvariable=count_var,
+                              font=("Segoe UI",9,"bold"),
+                              bg=BG_CARD, fg=ACCENT_BLUE)
+            count_lbl.pack(side=LEFT, padx=(0,10))
 
             # ── Treeview ──
             cols = ["Date","Group ID","Arrival","Out","Visitor",
                     "Phone","ID Cards","Company","Purpose","Officer"]
             tree_frame = Frame(top, bg=BG_PAGE)
             tree_frame.pack(fill=BOTH, expand=True, padx=12, pady=6)
-            tv = build_treeview(tree_frame, cols, height=16)
+            tv = build_treeview(tree_frame, cols, height=18)
 
-            _filtered_df = [None]   # store for PDF/Excel save
+            def _in_range(d_str, fd, td2):
+                try:
+                    d = datetime.strptime(d_str.strip(), DATE_FORMAT)
+                    return fd <= d <= td2
+                except: return False
 
             def _apply_filter(*_):
                 for row in tv.get_children(): tv.delete(row)
                 try:
-                    df_all = pd.read_excel(VISITORS_FILE(), dtype=str,
-                                           engine="openpyxl").fillna("")
-                    df_all["Date"] = df_all["Date"].astype(str).str.strip()
-                    df_all["Out"]  = df_all["Out"].astype(str).str.strip()
-
-                    # Date filter
                     try:
-                        fd = datetime.strptime(from_var.get().strip(), DATE_FORMAT)
-                        td2 = datetime.strptime(to_var.get().strip(), DATE_FORMAT)
+                        fd  = datetime.strptime(from_var.get().strip(), DATE_FORMAT)
+                        td2 = datetime.strptime(to_var.get().strip(),   DATE_FORMAT)
                     except:
-                        messagebox.showwarning("Date Format",
-                            "Use dd-mm-yyyy format.\nExample: 15-04-2026",
+                        messagebox.showwarning("Date Error",
+                            "Click the date buttons to select dates.",
                             parent=top)
                         return
 
-                    mask = df_all["Date"].apply(
-                        lambda d: _in_range(d, fd, td2))
-                    df_f = df_all[mask].copy()
+                    df_f = df_all.copy() if not df_all.empty else pd.DataFrame()
+                    if df_f.empty:
+                        count_var.set("0 record(s)"); return
 
-                    # Type filter
+                    mask = df_f["Date"].apply(lambda d: _in_range(d, fd, td2))
+                    df_f = df_f[mask].copy()
+
                     t_sel = type_var.get()
                     if t_sel == "Inside":
                         df_f = df_f[df_f["Out"].isin(OUT_EMPTY)]
@@ -2617,7 +2905,7 @@ def open_reception():
 
                     for _, r in df_f.iterrows():
                         out_v = str(r.get("Out","")).strip()
-                        status = out_v if out_v not in OUT_EMPTY else "Inside ✅"
+                        status = out_v if out_v not in OUT_EMPTY else "Inside ✓"
                         tv.insert("", END, values=[
                             str(r.get("Date","")),
                             str(r.get("Group ID","")),
@@ -2633,141 +2921,101 @@ def open_reception():
                 except Exception as ex:
                     messagebox.showerror("Error", str(ex), parent=top)
 
-            def _in_range(d_str, fd, td2):
-                try:
-                    d = datetime.strptime(d_str.strip(), DATE_FORMAT)
-                    return fd <= d <= td2
-                except: return False
-
-            # Filter buttons
-            make_button(fi, "🔍  Search", BTN_SEARCH,
-                        command=_apply_filter,
-                        padx=12, pady=6).pack(side=LEFT, padx=(8,4))
-
-            def _save_excel():
-                if _filtered_df[0] is None or _filtered_df[0].empty:
-                    messagebox.showwarning("Empty",
-                        "No data to save. Run Search first.", parent=top)
-                    return
-                from tkinter import filedialog
-                fp = filedialog.asksaveasfilename(
-                    parent=top,
-                    title="Save Report as Excel",
-                    defaultextension=".xlsx",
-                    initialfile=f"GST_Report_{from_var.get()}_{to_var.get()}",
-                    filetypes=[("Excel","*.xlsx"),("All","*.*")])
-                if not fp: return
-                try:
-                    df_save = _filtered_df[0]
-                    df_save.to_excel(fp, index=False, engine="openpyxl")
-                    # Style it
-                    from openpyxl import load_workbook
-                    from openpyxl.styles import PatternFill,Font,Alignment,Border,Side
-                    wb = load_workbook(fp); ws = wb.active
-                    hf  = PatternFill("solid", fgColor="1E3A5F")
-                    hft = Font(bold=True, color="FFFFFF",
-                               name="Segoe UI", size=10)
-                    th  = Side(style="thin", color="D1D5DB")
-                    bd  = Border(left=th,right=th,top=th,bottom=th)
-                    for c in ws[1]:
-                        c.fill=hf; c.font=hft
-                        c.alignment=Alignment(horizontal="center")
-                        c.border=bd
-                    for row in ws.iter_rows(min_row=2):
-                        for c in row:
-                            c.alignment=Alignment(horizontal="center")
-                            c.border=bd
-                            if c.row%2==0:
-                                c.fill=PatternFill("solid",fgColor="EFF6FF")
-                    for col in ws.columns:
-                        ml=max((len(str(c.value)) if c.value else 0) for c in col)
-                        ws.column_dimensions[col[0].column_letter].width=min(ml+4,30)
-                    wb.save(fp)
-                    if messagebox.askyesno("✅ Saved",
-                        f"Saved {len(df_save)} records.\n\n{fp}\n\nOpen now?",
-                        parent=top):
-                        os.startfile(fp)
-                except Exception as ex:
-                    messagebox.showerror("Error", str(ex), parent=top)
-
             def _save_pdf():
                 if _filtered_df[0] is None or _filtered_df[0].empty:
                     messagebox.showwarning("Empty",
-                        "No data to save. Run Search first.", parent=top)
+                        "No data. Click Search first.", parent=top)
                     return
                 from tkinter import filedialog
                 fp = filedialog.asksaveasfilename(
                     parent=top,
-                    title="Save Report as PDF",
+                    title="Save Visitor Report as PDF",
                     defaultextension=".pdf",
-                    initialfile=f"GST_Report_{from_var.get()}_{to_var.get()}",
-                    filetypes=[("PDF","*.pdf"),("All","*.*")])
+                    initialfile=f"GST_Visitor_Report_{from_var.get().replace('-','_')}_to_{to_var.get().replace('-','_')}",
+                    filetypes=[("PDF File","*.pdf"),("All Files","*.*")])
                 if not fp: return
                 try:
-                    # Save as Excel first, then convert using openpyxl
-                    # Pure Python PDF without reportlab
-                    import tkinter as _tk
                     df_pdf = _filtered_df[0]
-                    # Build HTML then save — simpler and works everywhere
-                    html_fp = fp.replace(".pdf",".html")
-                    html = ["<html><head><style>",
-                            "body{font-family:Arial,sans-serif;font-size:11px}",
-                            "h2{color:#1E3A5F}",
-                            "table{border-collapse:collapse;width:100%}",
-                            "th{background:#1E3A5F;color:white;padding:6px;text-align:center}",
-                            "td{border:1px solid #D1D5DB;padding:5px;text-align:center}",
-                            "tr:nth-child(even){background:#EFF6FF}",
-                            "</style></head><body>",
-                            f"<h2>GST Department — Visitor Report</h2>",
-                            f"<p>Period: {from_var.get()} to {to_var.get()} | "
-                            f"Total: {len(df_pdf)} records | "
-                            f"Generated: {datetime.now().strftime('%d-%m-%Y %H:%M')}</p>",
-                            "<table><tr>"]
-                    show_cols = ["Date","Group ID","Arrival","Out","Visitor",
-                                 "Phone","Company","Purpose","Officer"]
-                    for c in show_cols:
-                        html.append(f"<th>{c}</th>")
-                    html.append("</tr>")
+                    show_cols = ["Date","Group ID","Arrival","Out",
+                                 "Visitor","Phone","Company","Purpose","Officer"]
+                    rows_html = []
                     for _, r in df_pdf.iterrows():
-                        html.append("<tr>")
+                        cells = []
                         for c in show_cols:
                             val = str(r.get(c,"")).strip()
                             if c == "Out" and val in OUT_EMPTY:
                                 val = "Inside"
-                            html.append(f"<td>{val}</td>")
-                        html.append("</tr>")
-                    html.append("</table></body></html>")
-                    # Save HTML file
-                    with open(html_fp,"w",encoding="utf-8") as hf_out:
-                        hf_out.write("".join(html))
-                    # Open in browser — user can Print → Save as PDF
+                            cells.append(f"<td>{val}</td>")
+                        rows_html.append("<tr>"+"".join(cells)+"</tr>")
+
+                    html = f"""<!DOCTYPE html>
+<html><head><meta charset='utf-8'>
+<title>GST Visitor Report</title>
+<style>
+  @page {{size:A4 landscape;margin:1cm}}
+  @media print {{.no-print{{display:none}}}}
+  body{{font-family:Arial,sans-serif;font-size:10px;color:#1E293B}}
+  .hdr{{background:#1E3A5F;color:white;padding:12px 16px;border-radius:4px;margin-bottom:10px}}
+  .hdr h2{{margin:0;font-size:16px}}
+  .hdr p{{margin:4px 0 0 0;font-size:11px;opacity:.8}}
+  .meta{{display:flex;gap:16px;margin-bottom:10px;font-size:10px;color:#475569}}
+  .meta span{{background:#F1F5F9;padding:3px 8px;border-radius:4px;border:1px solid #E2E8F0}}
+  table{{width:100%;border-collapse:collapse;font-size:9px}}
+  th{{background:#1E3A5F;color:white;padding:6px 4px;text-align:center;border:1px solid #1E3A5F}}
+  td{{padding:5px 4px;border:1px solid #E2E8F0;text-align:center}}
+  tr:nth-child(even){{background:#EFF6FF}}
+  .footer{{margin-top:10px;font-size:9px;color:#94A3B8;text-align:right;border-top:1px solid #E2E8F0;padding-top:6px}}
+  .print-btn{{background:#1E3A5F;color:white;border:none;padding:10px 24px;font-size:13px;border-radius:4px;cursor:pointer;margin-bottom:12px}}
+</style></head><body>
+<button class='print-btn no-print' onclick='window.print()'>Print / Save as PDF</button>
+<div class='hdr'>
+  <h2>GST Department - Visitor Report</h2>
+  <p>Goods and Services Tax Department, Government of Karnataka</p>
+</div>
+<div class='meta'>
+  <span>From: {from_var.get()}</span>
+  <span>To: {to_var.get()}</span>
+  <span>Total: {len(df_pdf)} records</span>
+  <span>Type: {type_var.get()}</span>
+  <span>Generated: {datetime.now().strftime("%d-%m-%Y %H:%M")}</span>
+</div>
+<table>
+<tr>{"".join(f"<th>{c}</th>" for c in show_cols)}</tr>
+{"".join(rows_html)}
+</table>
+<div class='footer'>GST Visitor Management System | Developed by Udbhav K</div>
+</body></html>"""
+
+                    html_fp = fp.replace(".pdf","_report.html")
+                    with open(html_fp,"w",encoding="utf-8") as hf:
+                        hf.write(html)
                     import webbrowser
-                    webbrowser.open(html_fp)
-                    messagebox.showinfo("📄 Report Ready",
-                        "Report opened in your browser.\n\n"
+                    webbrowser.open(f"file:///{html_fp.replace(chr(92), '/')}")
+                    messagebox.showinfo("Report Ready",
+                        "Report opened in browser.\n\n"
                         "To save as PDF:\n"
-                        "  Press Ctrl+P → Change destination\n"
-                        "  → 'Save as PDF' → Save\n\n"
-                        f"HTML saved at: {html_fp}",
+                        "  Click 'Print / Save as PDF' button\n"
+                        "  OR press Ctrl+P\n"
+                        "  Destination: Save as PDF → Click Save\n\n"
+                        "Your data is read-only.",
                         parent=top)
                 except Exception as ex:
                     messagebox.showerror("Error", str(ex), parent=top)
 
-            # Save buttons
-            make_button(fi, "💾  Save Excel", BTN_IN,
-                        command=_save_excel,
-                        padx=12, pady=6).pack(side=LEFT, padx=4)
-            make_button(fi, "📄  Save PDF", "#7C3AED",
+            # Buttons in filter bar
+            make_button(fi, "🔍  Search", BTN_SEARCH,
+                        command=_apply_filter,
+                        padx=12, pady=6).pack(side=LEFT, padx=(0,6))
+            make_button(fi, "📄  Save as PDF", "#7C3AED",
                         command=_save_pdf,
-                        padx=12, pady=6).pack(side=LEFT, padx=4)
+                        padx=12, pady=6).pack(side=LEFT)
 
-            # Load today's data immediately
+            # Auto-load all data on open
             _apply_filter()
 
         except Exception as ex:
             messagebox.showerror("Error", str(ex))
 
-    # ── INSIDE detail popup ──
     def show_inside_detail():
         try:
             df    = get_cached_df()   # use cache — instant

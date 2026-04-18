@@ -1,6 +1,7 @@
-v16
-GitHub Releases used for EXE download - no 25MB limit
-Auto-detect old data after reinstall
-Visitor OUT fixed
-Inside count updates instantly
-Update popup fixed for all screens
+v17
+Visitor report calendar date picker added
+All data loads automatically on open
+Green dots on dates that have visitor data
+PDF with GST letterhead and print button
+Read-only for receptionist
+Import visitor data from backup in admin
